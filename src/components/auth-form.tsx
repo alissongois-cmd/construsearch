@@ -26,7 +26,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     const result = isLogin
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/dashboard` } });
+      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard` } });
 
     setLoading(false);
     if (result.error) { setError(result.error.message); return; }
