@@ -7,6 +7,15 @@ import { createClient } from "@/lib/supabase/client";
 
 type AuthFormProps = { mode: "login" | "signup" };
 
+/** Only allow an application-relative path after a successful login. */
+function getSafeLoginRedirect(redirectTo: string | null) {
+  if (!redirectTo?.startsWith("/") || redirectTo.startsWith("//")) {
+    return "/dashboard";
+  }
+
+  return redirectTo;
+}
+
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +44,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
     const redirectTo = new URLSearchParams(window.location.search).get("redirectTo");
-    router.push(isLogin && redirectTo?.startsWith("/") ? redirectTo : "/dashboard");
+    router.push(isLogin ? getSafeLoginRedirect(redirectTo) : "/dashboard");
     router.refresh();
   }
 
