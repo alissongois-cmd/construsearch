@@ -1,0 +1,12 @@
+import { createMaterial, deleteMaterial } from "../actions";
+import { createClient } from "@/lib/supabase/server";
+
+type Material = { id: string; nome: string; categoria: string; unidade_medida: string };
+
+export default async function MateriaisPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("materiais").select("id, nome, categoria, unidade_medida").order("nome");
+  const materiais = (data ?? []) as Material[];
+
+  return <div className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"><section><h2 className="text-xl font-bold text-slate-900">Novo material</h2><p className="mt-1 text-sm text-slate-600">Cadastre os itens que poderão ser comparados.</p><form action={createMaterial} className="mt-5 space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><label className="block text-sm font-medium">Nome<input required name="nome" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2" placeholder="Ex.: Cimento CP II" /></label><label className="block text-sm font-medium">Categoria<input required name="categoria" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2" placeholder="Ex.: cimento" /></label><label className="block text-sm font-medium">Unidade de medida<input required name="unidade_medida" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2" placeholder="Ex.: saco 50kg" /></label><button className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">Adicionar material</button></form></section><section><h2 className="text-xl font-bold text-slate-900">Materiais cadastrados</h2><div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">{materiais.length === 0 ? <p className="p-6 text-sm text-slate-600">Nenhum material cadastrado.</p> : <ul className="divide-y divide-slate-200">{materiais.map((material) => <li key={material.id} className="flex items-center justify-between gap-4 p-4"><div><p className="font-semibold text-slate-900">{material.nome}</p><p className="text-sm text-slate-600">{material.categoria} · {material.unidade_medida}</p></div><form action={deleteMaterial}><input type="hidden" name="id" value={material.id} /><button className="text-sm font-medium text-red-600 hover:underline">Excluir</button></form></li>)}</ul>}</div></section></div>;
+}
