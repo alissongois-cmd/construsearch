@@ -1,4 +1,4 @@
-import { extractLowestRelevantPrice } from "./price-parser.ts";
+import { extractLowestRelevantPrice } from "../_shared/price-parser.ts";
 
 function assertEquals(actual: unknown, expected: unknown) {
   if (actual !== expected) throw new Error(`Expected ${expected}, received ${actual}`);
