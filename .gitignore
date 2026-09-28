@@ -7,3 +7,8 @@ yarn-debug.log*
 yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
+
+# generated price collection
+/produtos_comparador.xlsx
+__pycache__/
+*.py[cod]
