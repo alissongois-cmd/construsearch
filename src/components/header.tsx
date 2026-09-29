@@ -2,12 +2,27 @@ import Link from "next/link";
 
 export function Header() {
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-bold text-slate-900">Comparador de Materiais</Link>
-        <nav className="flex items-center gap-4 text-sm font-medium">
-          <Link className="text-slate-600 hover:text-slate-950" href="/login">Entrar</Link>
-          <Link className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700" href="/cadastro">Criar conta</Link>
+    <header className="border-b border-carbon bg-paper">
+      <div className="mx-auto flex min-h-14 max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <Link
+          href="/"
+          className="max-w-40 text-sm font-bold uppercase leading-tight tracking-[-0.02em] text-carbon sm:max-w-none sm:text-base"
+        >
+          Comparador de Materiais
+        </Link>
+        <nav aria-label="Navegação principal" className="flex items-center gap-3 text-sm">
+          <Link
+            className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline"
+            href="/login"
+          >
+            Entrar
+          </Link>
+          <Link
+            className="rounded-[4px] border border-carbon px-3 py-2 font-bold text-carbon hover:bg-bone"
+            href="/cadastro"
+          >
+            Criar conta
+          </Link>
         </nav>
       </div>
     </header>
