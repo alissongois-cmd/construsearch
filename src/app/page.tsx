@@ -3,6 +3,10 @@ import { PriceResultCard } from "@/components/price-result-card";
 import { SearchForm } from "@/components/search-form";
 import { createClient } from "@/lib/supabase/server";
 
+// Price results must always reflect the current Supabase data and the current UI deploy.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type Relation<T> = T | T[] | null;
 type SearchResult = {
   valor: number | string;
