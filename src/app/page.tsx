@@ -11,7 +11,7 @@ type Relation<T> = T | T[] | null;
 type SearchResult = {
   valor: number | string;
   data_atualizacao: string;
-  materiais: Relation<{ nome: string }>;
+  materiais: Relation<{ nome: string; imagem_url: string | null }>;
   lojas: Relation<{ nome: string; cidade: string }>;
 };
 
@@ -33,7 +33,7 @@ export default async function Home({
     const { data } = await supabase
       .from("precos")
       .select(
-        "valor, data_atualizacao, materiais!inner(nome), lojas!inner(nome, cidade)",
+        "valor, data_atualizacao, materiais!inner(nome, imagem_url), lojas!inner(nome, cidade)",
       )
       .ilike("materiais.nome", `%${searchTerm}%`)
       .order("valor", { ascending: true });
@@ -134,6 +134,7 @@ export default async function Home({
                       <PriceResultCard
                         key={`${material?.nome}-${store?.nome}-${result.data_atualizacao}-${index}`}
                         material={material?.nome ?? "Material não identificado"}
+                        imageUrl={material?.imagem_url ?? null}
                         store={store?.nome ?? "Loja não identificada"}
                         city={store?.cidade ?? "Cidade não identificada"}
                         price={price}

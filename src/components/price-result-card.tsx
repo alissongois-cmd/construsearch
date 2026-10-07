@@ -39,6 +39,7 @@ function getUpdateLabel(updatedAt: string) {
 
 type PriceResultCardProps = {
   material: string;
+  imageUrl: string | null;
   store: string;
   city: string;
   price: number;
@@ -48,6 +49,7 @@ type PriceResultCardProps = {
 
 export function PriceResultCard({
   material,
+  imageUrl,
   store,
   city,
   price,
@@ -62,22 +64,49 @@ export function PriceResultCard({
         isBestPrice ? "border-l-[3px] border-l-best" : ""
       }`}
     >
-      <div>
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="text-base font-bold leading-snug text-carbon">
-            {material}
-          </h3>
-          {isBestPrice && (
-            <span className="shrink-0 border border-best px-2 py-1 text-xs font-bold text-best">
-              Melhor preço
-            </span>
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden border border-mist bg-bone sm:h-24 sm:w-24">
+          {imageUrl ? (
+            // The image host is the project's configurable Supabase URL.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={`Imagem de ${material}`}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              className="h-8 w-8 text-ash"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-label="Imagem não disponível"
+              role="img"
+            >
+              <path d="M4 5.5h16v13H4z" />
+              <circle cx="9" cy="10" r="1.5" />
+              <path d="m5 17 4.5-4 3 2.5 2.5-2 4 3.5" />
+            </svg>
           )}
         </div>
-        <p className="mt-3 text-sm text-ash">
-          <span className="font-bold text-carbon">{store}</span>
-          <span aria-hidden="true"> · </span>
-          {city}
-        </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
+            <h3 className="text-base font-bold leading-snug text-carbon">
+              {material}
+            </h3>
+            {isBestPrice && (
+              <span className="shrink-0 border border-best px-2 py-1 text-xs font-bold text-best">
+                Melhor preço
+              </span>
+            )}
+          </div>
+          <p className="mt-3 text-sm text-ash">
+            <span className="font-bold text-carbon">{store}</span>
+            <span aria-hidden="true"> · </span>
+            {city}
+          </p>
+        </div>
       </div>
 
       <div className="mt-6 flex flex-col gap-1 border-t border-mist pt-3">

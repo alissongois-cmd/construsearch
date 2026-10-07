@@ -4,6 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+const MATERIAL_IMAGES_BUCKET = "materiais-imagens";
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
 async function getAuthenticatedClient() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,13 +26,52 @@ function requiredValue(formData: FormData, field: string) {
 }
 
 export async function createMaterial(formData: FormData) {
-  const { supabase } = await getAuthenticatedClient();
+  const { supabase, user } = await getAuthenticatedClient();
+  const image = formData.get("imagem");
+  let imagePath: string | null = null;
+  let imageUrl: string | null = null;
+
+  if (image instanceof File && image.size > 0) {
+    const extension = ALLOWED_IMAGE_TYPES[image.type];
+
+    if (!extension) {
+      throw new Error("A imagem deve estar no formato JPG, PNG ou WebP.");
+    }
+
+    if (image.size > MAX_IMAGE_SIZE) {
+      throw new Error("A imagem deve ter no máximo 2 MB.");
+    }
+
+    imagePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from(MATERIAL_IMAGES_BUCKET)
+      .upload(imagePath, image, {
+        cacheControl: "3600",
+        contentType: image.type,
+        upsert: false,
+      });
+
+    if (uploadError) throw new Error(`Falha ao enviar a imagem: ${uploadError.message}`);
+
+    const { data } = supabase.storage
+      .from(MATERIAL_IMAGES_BUCKET)
+      .getPublicUrl(imagePath);
+    imageUrl = data.publicUrl;
+  }
+
   const { error } = await supabase.from("materiais").insert({
     nome: requiredValue(formData, "nome"),
     categoria: requiredValue(formData, "categoria"),
     unidade_medida: requiredValue(formData, "unidade_medida"),
+    imagem_url: imageUrl,
   });
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    if (imagePath) {
+      await supabase.storage.from(MATERIAL_IMAGES_BUCKET).remove([imagePath]);
+    }
+    throw new Error(error.message);
+  }
   revalidatePath("/admin/materiais");
   revalidatePath("/");
 }
@@ -60,8 +107,23 @@ export async function createPreco(formData: FormData) {
 
 export async function deleteMaterial(formData: FormData) {
   const { supabase } = await getAuthenticatedClient();
-  const { error } = await supabase.from("materiais").delete().eq("id", requiredValue(formData, "id"));
+  const id = requiredValue(formData, "id");
+  const { data: material } = await supabase
+    .from("materiais")
+    .select("imagem_url")
+    .eq("id", id)
+    .maybeSingle();
+  const { error } = await supabase.from("materiais").delete().eq("id", id);
   if (error) throw new Error(error.message);
+
+  const publicPathMarker = `/storage/v1/object/public/${MATERIAL_IMAGES_BUCKET}/`;
+  const imagePath = material?.imagem_url?.split(publicPathMarker)[1];
+  if (imagePath) {
+    await supabase.storage
+      .from(MATERIAL_IMAGES_BUCKET)
+      .remove([decodeURIComponent(imagePath)]);
+  }
+
   revalidatePath("/admin/materiais");
   revalidatePath("/admin/precos");
   revalidatePath("/");
