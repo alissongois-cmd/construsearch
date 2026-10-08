@@ -6,6 +6,7 @@ type Material = {
   nome: string;
   categoria: string;
   unidade_medida: string;
+  ean: string | null;
   imagem_url: string | null;
 };
 
@@ -13,7 +14,7 @@ export default async function MateriaisPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("materiais")
-    .select("id, nome, categoria, unidade_medida, imagem_url")
+    .select("id, nome, categoria, unidade_medida, ean, imagem_url")
     .order("nome");
   const materiais = (data ?? []) as Material[];
 
@@ -56,6 +57,19 @@ export default async function MateriaisPage() {
             />
           </label>
           <label className="block text-sm font-medium">
+            Código EAN/GTIN (opcional)
+            <input
+              name="ean"
+              inputMode="numeric"
+              pattern="[0-9 -]{8,18}"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2"
+              placeholder="Ex.: 7891234567890"
+            />
+            <span className="mt-1 block text-xs font-normal text-slate-500">
+              Se encontrado na Cosmos, a imagem será preenchida automaticamente.
+            </span>
+          </label>
+          <label className="block text-sm font-medium">
             Imagem (opcional)
             <input
               name="imagem"
@@ -64,7 +78,7 @@ export default async function MateriaisPage() {
               className="mt-1 block w-full rounded-md border border-slate-300 text-sm text-slate-600 file:mr-3 file:border-0 file:border-r file:border-slate-300 file:bg-slate-50 file:px-3 file:py-2 file:font-semibold file:text-slate-900"
             />
             <span className="mt-1 block text-xs font-normal text-slate-500">
-              JPG, PNG ou WebP, com no máximo 2 MB.
+              Alternativa caso o EAN não tenha imagem: JPG, PNG ou WebP, até 2 MB.
             </span>
           </label>
           <button className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">
@@ -107,6 +121,9 @@ export default async function MateriaisPage() {
                       <p className="text-sm text-slate-600">
                         {material.categoria} · {material.unidade_medida}
                       </p>
+                      {material.ean && (
+                        <p className="mt-0.5 text-xs text-slate-500">EAN {material.ean}</p>
+                      )}
                     </div>
                   </div>
                   <form action={deleteMaterial}>
