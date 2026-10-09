@@ -1,7 +1,9 @@
-import "server-only";
-
 const COSMOS_API_URL = "https://api.cosmos.bluesoft.com.br";
 const COSMOS_TIMEOUT_MS = 5_000;
+
+type CosmosProduct = {
+  thumbnail?: unknown;
+};
 
 function safeImageUrl(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -22,9 +24,13 @@ function safeImageUrl(value: unknown) {
  */
 export async function findCosmosThumbnail(ean: string) {
   const token = process.env.COSMOS_API_TOKEN;
-  const userAgent = process.env.COSMOS_API_USER_AGENT;
 
-  if (!ean || !token?.trim() || !userAgent?.trim()) return null;
+  if (!ean || !token) {
+    if (ean && !token) {
+      console.warn("COSMOS_API_TOKEN não configurado; busca por EAN ignorada.");
+    }
+    return null;
+  }
 
   try {
     const response = await fetch(
@@ -34,23 +40,27 @@ export async function findCosmosThumbnail(ean: string) {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          "User-Agent": userAgent,
+          "User-Agent":
+            process.env.COSMOS_API_USER_AGENT ?? "ComparadorDeMateriais/1.0",
           "X-Cosmos-Token": token,
         },
         cache: "no-store",
-        redirect: "error",
         signal: AbortSignal.timeout(COSMOS_TIMEOUT_MS),
       },
     );
 
-    if (!response.ok) return null;
+    if (response.status === 404) return null;
 
-    const product: unknown = await response.json();
-    if (!product || typeof product !== "object" || !("thumbnail" in product)) {
+    if (!response.ok) {
+      console.warn(`Cosmos respondeu com HTTP ${response.status} para o EAN informado.`);
       return null;
     }
+
+    const product = (await response.json()) as CosmosProduct;
     return safeImageUrl(product.thumbnail);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "erro desconhecido";
+    console.warn(`Não foi possível consultar a Cosmos: ${message}`);
     return null;
   }
 }

@@ -38,10 +38,7 @@ Crie uma conta na Cosmos/Bluesoft e gere a credencial da API. Depois configure
   chave e faça um novo deploy;
 - nunca use o prefixo `NEXT_PUBLIC_`, pois ele exporia o token no navegador.
 
-A Cosmos também informa um User-Agent junto às credenciais. Configure esse valor
-em `COSMOS_API_USER_AGENT`, também somente no servidor e sem `NEXT_PUBLIC_`.
-Sem token ou User-Agent, a consulta é ignorada silenciosamente. A requisição usa
-`GET /gtins/{codigo}.json`, não usa cache e tem timeout de 5 segundos. Apenas
-imagens com URL HTTP ou HTTPS são aceitas. Erros, resposta inválida, timeout e EAN
-não encontrado não impedem o cadastro: nesses casos, a aplicação usa o upload
-manual quando ele tiver sido informado, ou cadastra o material sem imagem.
+A Cosmos também informa um User-Agent junto às credenciais. Ele pode ser
+configurado como `COSMOS_API_USER_AGENT`; se omitido, a aplicação usa o nome do
+app. Erros, timeout e EAN não encontrado não impedem o cadastro: nesse caso, a
+aplicação usa o upload manual quando ele tiver sido informado.
