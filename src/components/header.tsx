@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function Header() {
@@ -6,9 +7,18 @@ export function Header() {
       <div className="mx-auto flex min-h-14 max-w-[1200px] flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="max-w-40 text-sm font-bold uppercase leading-tight tracking-[-0.02em] text-carbon sm:max-w-none sm:text-base"
+          className="block shrink-0 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-carbon"
+          aria-label="OBRASEARCH — página inicial"
         >
-          Comparador de Materiais
+          <Image
+            src="/obrasearch-logo.png"
+            alt="OBRASEARCH"
+            width={1699}
+            height={926}
+            priority
+            sizes="(min-width: 640px) 192px, 160px"
+            className="h-auto w-40 sm:w-48"
+          />
         </Link>
         <nav aria-label="Navegação principal" className="flex items-center gap-3 text-sm">
           <a
