@@ -4,6 +4,7 @@ const links = [
   ["Materiais", "/admin/materiais"],
   ["Lojas", "/admin/lojas"],
   ["Preços", "/admin/precos"],
+  ["Pendentes", "/admin/pendentes"],
 ] as const;
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
