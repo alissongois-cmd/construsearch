@@ -45,3 +45,27 @@ Sem token ou User-Agent, a consulta é ignorada silenciosamente. A requisição 
 imagens com URL HTTP ou HTTPS são aceitas. Erros, resposta inválida, timeout e EAN
 não encontrado não impedem o cadastro: nesses casos, a aplicação usa o upload
 manual quando ele tiver sido informado, ou cadastra o material sem imagem.
+
+## Produtos enviados pelo público
+
+Execute `20261010000000_create_envios_pendentes.sql` depois das migrations anteriores.
+Pode ser executada novamente: tabela/índice usam `if not exists`, políticas são
+recriadas e a função de aprovação usa `create or replace`.
+
+`/cadastrar-produto` aceita envios sem login. A tabela `envios_pendentes` permite
+inserção anônima apenas dos campos do formulário, com status inicial `pendente`;
+visitantes não podem consultar os envios, alterar status ou remover registros.
+O honeypot é validado no servidor e envios que o preenchem não são gravados.
+
+Administradores acessam `/admin/pendentes` após login. Conforme o modelo atual do
+projeto, o papel `authenticated` tem acesso administrativo (não há um papel de
+administrador separado). Aprovação reutiliza loja por nome/cidade e material por
+nome, ignorando diferenças de caixa e espaços nas extremidades. Atualiza o preço
+existente ou cria um novo. Todas as etapas e o status `aprovado` são atômicos;
+aprovações são serializadas para evitar duplicação entre envios simultâneos.
+Rejeição altera somente o status e preserva o histórico na tabela.
+
+`npm run test:submissions` verifica a migration duas vezes em PostgreSQL local
+embutido (PGlite), as permissões/RLS, aprovação repetida, reutilização de registros,
+atualização de preço e rollback em caso de falha. Também testa a validação do
+formulário e o descarte pelo honeypot, sem acessar o banco de produção.

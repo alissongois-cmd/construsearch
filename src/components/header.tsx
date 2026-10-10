@@ -20,16 +20,13 @@ export function Header() {
             className="h-auto w-40 sm:w-48"
           />
         </Link>
-        <nav aria-label="Navegação principal" className="flex items-center gap-3 text-sm">
-          <a
+        <nav aria-label="Navegação principal" className="flex flex-wrap items-center gap-3 text-sm">
+          <Link
             className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline"
-            href="https://github.com/alissongois-cmd/construsearch/pull/16"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Ver PR #16 no GitHub (abre em nova aba)"
+            href="/cadastrar-produto"
           >
-            PR #16
-          </a>
+            Cadastrar produto
+          </Link>
           <Link
             className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline"
             href="/login"
