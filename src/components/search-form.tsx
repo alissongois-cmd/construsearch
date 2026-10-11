@@ -26,10 +26,10 @@ function SubmitButton() {
   );
 }
 
-export function SearchForm({ initialQuery }: { initialQuery: string }) {
+export function SearchForm({ initialQuery, action = "/" }: { initialQuery: string; action?: string | ((data: FormData) => void | Promise<void>) }) {
   return (
     <form
-      action="/"
+      action={action}
       className="mt-7 flex max-w-2xl flex-col gap-2 sm:flex-row"
       role="search"
     >

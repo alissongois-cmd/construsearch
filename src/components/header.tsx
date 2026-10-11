@@ -21,12 +21,8 @@ export function Header() {
           />
         </Link>
         <nav aria-label="Navegação principal" className="flex flex-wrap items-center gap-3 text-sm">
-          <Link
-            className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline"
-            href="/cadastrar-produto"
-          >
-            Cadastrar produto
-          </Link>
+          <Link href="/lista" className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline">Lista de compras</Link>
+          <Link className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline" href="/cadastrar-produto">Cadastrar produto</Link>
           <Link
             className="px-1 py-3 font-bold text-carbon underline-offset-4 hover:underline"
             href="/login"
