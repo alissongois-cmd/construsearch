@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
-const source = ts.transpileModule(readFileSync(new URL('../src/lib/shopping-list.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
+const shippingSource = ts.transpileModule(readFileSync(new URL("../src/lib/shipping.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2022 } }).outputText;
+const shippingUrl = `data:text/javascript;base64,${Buffer.from(shippingSource).toString("base64")}`;
+const source = ts.transpileModule(readFileSync(new URL('../src/lib/shopping-list.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText.replace("./shipping", shippingUrl);
 const { rankStores } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const offer = (storeId, price) => ({ storeId, store: storeId, city: 'Cidade', price });
 const items = [

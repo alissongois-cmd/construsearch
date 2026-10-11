@@ -68,7 +68,7 @@ export function ShoppingList() {
     </section>
     {!!items.length && <section className="mt-10" aria-labelledby="ranking-heading" aria-live="polite">
       <h2 id="ranking-heading" className="text-lg font-bold">Total por loja</h2>
-      <p className="mt-2 text-sm text-ash">Ordenado do menor ao maior total. Totais parciais incluem somente os itens com preço cadastrado e não representam a lista completa. Valores sem frete; confirme preço e estoque com a loja.</p>
+      <p className="mt-2 text-sm text-ash">Ordenado do menor ao maior total. Totais parciais incluem somente os itens com preço cadastrado e não representam a lista completa. Totais incluem o frete estimado quando informado; confirme preço, frete e estoque com a loja.</p>
       {bestTotal === undefined && <p className="mt-4 text-sm font-bold">Nenhuma loja tem preço para todos os itens da lista.</p>}
       {!stores.length && <p className="mt-4 text-sm">Nenhum preço cadastrado para os itens selecionados.</p>}
       <ol className="mt-4 grid gap-3 md:grid-cols-2">{stores.map((store) => {
@@ -78,6 +78,8 @@ export function ShoppingList() {
           <h3 className="font-bold">{store.name}</h3><p className="text-sm text-ash">{store.city}</p>
           <p className={`mt-3 text-xs font-bold ${best ? "text-best" : "text-carbon"}`}>{best ? "Menor total completo" : complete ? "Lista completa" : "Cobertura parcial"} · {items.length - store.missing.length}/{items.length} itens</p>
           <p className={`mt-2 text-xl font-bold ${best ? "text-best" : "text-carbon"}`}>{currency.format(store.total)}{!complete && <span className="ml-2 text-sm">(parcial)</span>}</p>
+          {store.shipping != null && <p className="mt-1 text-sm">{store.shipping === 0 ? "Frete estimado grátis" : `+ frete estimado ${currency.format(store.shipping)}`} (incluído no total)</p>}
+          {store.shipping != null && <p className="mt-1 text-sm text-ash">Subtotal dos produtos: {currency.format(store.subtotal)}</p>}
           {!complete && <p className="mt-3 text-sm">Não disponível nesta loja: {store.missing.join(", ")}. Sem preço cadastrado para esses itens.</p>}
         </li>;
       })}</ol>

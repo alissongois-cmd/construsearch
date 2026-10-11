@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { approveSubmission, rejectSubmission } from "./actions";
 
-type Submission = {
+import { money, type Shipping } from "@/lib/shipping";
+
+type Submission = Shipping & {
   id: string; nome_loja: string; cidade: string; contato: string | null;
   nome_produto: string; categoria: string; unidade_medida: string;
   preco: number; created_at: string;
@@ -15,7 +17,7 @@ export default async function PendingSubmissionsPage({ searchParams }: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?redirectTo=/admin/pendentes");
   const { data, error } = await supabase.from("envios_pendentes")
-    .select("id,nome_loja,cidade,contato,nome_produto,categoria,unidade_medida,preco,created_at")
+    .select("id,nome_loja,cidade,contato,frete_fixo,frete_gratis_acima,nome_produto,categoria,unidade_medida,preco,created_at")
     .eq("status", "pendente").order("created_at");
   const { resultado } = await searchParams;
   const submissions = (data ?? []) as Submission[];
@@ -33,6 +35,8 @@ export default async function PendingSubmissionsPage({ searchParams }: {
             <p>{item.categoria} · {item.unidade_medida}</p>
             <p className="mt-2 font-semibold">{Number(item.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
             <p className="mt-2">{item.nome_loja} · {item.cidade}</p>
+            {item.frete_fixo != null && <p className="text-sm">Frete estimado: {money(item.frete_fixo)}</p>}
+            {item.frete_gratis_acima != null && <p className="text-sm">Frete grátis a partir de: {money(item.frete_gratis_acima)}</p>}
             {item.contato && <p className="text-sm">Contato: {item.contato}</p>}
             <p className="mt-1 text-xs text-slate-500">Recebido em {new Date(item.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</p>
             <div className="mt-4 flex gap-3">

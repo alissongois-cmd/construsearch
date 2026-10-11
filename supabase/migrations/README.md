@@ -88,3 +88,14 @@ Rejeição altera somente o status e preserva o histórico na tabela.
 embutido (PGlite), as permissões/RLS, aprovação repetida, reutilização de registros,
 atualização de preço e rollback em caso de falha. Também testa a validação do
 formulário e o descarte pelo honeypot, sem acessar o banco de produção.
+
+## Frete estimado
+
+Execute `20261011010000_add_estimated_shipping.sql` após as migrations de envios pendentes.
+A migration pode ser reaplicada e preserva os dados existentes. Ela adiciona os campos
+opcionais de frete, libera seu envio anônimo e atualiza a aprovação atômica.
+Na aprovação, valores preenchidos atualizam a loja; campos vazios preservam o frete
+já cadastrado. Para remover uma configuração, use a edição em `/admin/lojas`.
+Em `/lista`, o frete é calculado uma vez por loja sobre o subtotal dos produtos,
+com gratuidade ao atingir o mínimo, e lojas com itens sem preço são sinalizadas
+como incompletas.

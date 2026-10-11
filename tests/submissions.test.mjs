@@ -9,6 +9,7 @@ import * as XLSX from "xlsx";
 const migration = readFileSync(new URL("../supabase/migrations/20261010000000_create_envios_pendentes.sql", import.meta.url), "utf8");
 const baseSchema = readFileSync(new URL("../supabase/migrations/20260919000000_create_comparador_materiais_schema.sql", import.meta.url), "utf8");
 const optionalMigration = readFileSync(new URL("../supabase/migrations/20261011000000_optional_submission_product_fields.sql", import.meta.url), "utf8");
+const shippingMigration = readFileSync(new URL("../supabase/migrations/20261011010000_add_estimated_shipping.sql", import.meta.url), "utf8");
 const userId = "11111111-1111-4111-8111-111111111111";
 
 test("migration is repeatable; anonymous submissions remain private; moderation publishes atomically", async () => {
@@ -29,9 +30,12 @@ test("migration is repeatable; anonymous submissions remain private; moderation 
     await db.exec(migration);
     await db.exec(optionalMigration);
     await db.exec(optionalMigration);
+    await db.exec(shippingMigration);
+    await db.exec(shippingMigration);
     await db.exec("set role anon");
     const insert = "insert into public.envios_pendentes (nome_loja,cidade,nome_produto,categoria,unidade_medida,preco) values ($1,$2,$3,'cimento','saco', $4)";
-    await db.query(insert, ["Depósito", "São Paulo", "Cimento", 35.9]);
+    await db.query("insert into public.envios_pendentes (nome_loja,cidade,nome_produto,categoria,unidade_medida,preco,frete_fixo,frete_gratis_acima) values ('Depósito','São Paulo','Cimento','cimento','saco',35.9,25,200)");
+    await assert.rejects(db.exec("insert into public.envios_pendentes (nome_loja,cidade,nome_produto,categoria,unidade_medida,preco,frete_fixo) values ('x','x','x','','',1,-1)"));
     for (const sql of [
       "select * from public.envios_pendentes",
       "update public.envios_pendentes set status = 'aprovado'",
@@ -49,6 +53,10 @@ test("migration is repeatable; anonymous submissions remain private; moderation 
     assert.equal((await db.query("select count(*)::int as count from public.precos")).rows[0].count, 1);
     assert.equal((await db.query("select status from public.envios_pendentes where id=$1", [first.id])).rows[0].status, "aprovado");
 
+    const shipping = (await db.query("select frete_fixo,frete_gratis_acima from public.lojas")).rows[0];
+    assert.equal(Number(shipping.frete_fixo), 25);
+    assert.equal(Number(shipping.frete_gratis_acima), 200);
+
     await db.query(insert, [" DEPÓSITO ", " SÃO PAULO ", " CIMENTO ", 40]);
     const second = (await db.query("select id from public.envios_pendentes where status='pendente'")).rows[0].id;
     await db.query("select public.aprovar_envio($1)", [second]);
@@ -56,6 +64,14 @@ test("migration is repeatable; anonymous submissions remain private; moderation 
       assert.equal((await db.query(`select count(*)::int as count from public.${table}`)).rows[0].count, 1);
     }
     assert.equal(Number((await db.query("select valor from public.precos")).rows[0].valor), 40);
+
+    assert.equal(Number((await db.query("select frete_fixo from public.lojas")).rows[0].frete_fixo), 25);
+    await db.exec("insert into public.envios_pendentes (nome_loja,cidade,nome_produto,categoria,unidade_medida,preco,frete_fixo,frete_gratis_acima) values ('Depósito','São Paulo','Cimento','','',40,0,300)");
+    const updated = (await db.query("select id from public.envios_pendentes where status='pendente'")).rows[0].id;
+    await db.query("select public.aprovar_envio($1)", [updated]);
+    const newShipping = (await db.query("select frete_fixo,frete_gratis_acima from public.lojas")).rows[0];
+    assert.equal(Number(newShipping.frete_fixo), 0);
+    assert.equal(Number(newShipping.frete_gratis_acima), 300);
 
     await db.query(insert, ["Depósito", "Outra cidade", "Cimento", 50]);
     const third = (await db.query("select id from public.envios_pendentes where status='pendente'")).rows[0].id;
@@ -96,6 +112,8 @@ runInNewContext(compile("../src/lib/product-spreadsheet.ts"), {
   exports: parserExports, Buffer, Error,
   require(name) { assert.equal(name, "xlsx"); return XLSX; },
 });
+const shippingExports = {};
+runInNewContext(compile("../src/lib/shipping.ts"), { exports: shippingExports, Error });
 const actionSource = compile("../src/app/cadastrar-produto/actions.ts");
 
 function submissionAction(error = null, throws = false) {
@@ -104,6 +122,7 @@ function submissionAction(error = null, throws = false) {
   runInNewContext(actionSource, {
     exports, File, Error,
     require(name) {
+      if (name === "@/lib/shipping") return shippingExports;
       if (name === "@/lib/product-spreadsheet") return parserExports;
       assert.equal(name, "@/lib/supabase/server");
       return { async createClient() { return { from(table) {
@@ -248,4 +267,23 @@ test("downloadable template can be submitted with its three examples", async () 
   assert.equal(result.received, 3);
   assert.equal(result.ignored.length, 0);
   assert.equal(stored.length, 3);
+});
+
+
+test("public submissions share optional shipping values and reject invalid shipping", async () => {
+  const { submit, stored } = submissionAction();
+  const form = validForm();
+  form.set("frete_fixo", "25,50");
+  form.set("frete_gratis_acima", "200");
+  assert.equal((await submit(state, form)).success, true);
+  for (const row of stored) {
+    assert.equal(row.frete_fixo, 25.5);
+    assert.equal(row.frete_gratis_acima, 200);
+  }
+  for (const value of ["-1", "NaN", "Infinity", "1e3", "0.001", "10000000000"]) {
+    const action = submissionAction();
+    const invalid = validForm(); invalid.set("frete_fixo", value);
+    assert.equal((await action.submit(state, invalid)).success, false);
+    assert.equal(action.stored.length, 0);
+  }
 });
