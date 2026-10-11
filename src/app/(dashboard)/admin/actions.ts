@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { findCosmosThumbnail } from "@/lib/cosmos";
 import { createClient } from "@/lib/supabase/server";
 
+import { optionalMoney } from "@/lib/shipping";
+
 const MATERIAL_IMAGES_BUCKET = "materiais-imagens";
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES: Record<string, string> = {
@@ -88,8 +90,26 @@ export async function createLoja(formData: FormData) {
     nome: requiredValue(formData, "nome"),
     cidade: requiredValue(formData, "cidade"),
     contato: contato || null,
+    frete_fixo: optionalMoney(formData, "frete_fixo"),
+    frete_gratis_acima: optionalMoney(formData, "frete_gratis_acima"),
   });
   if (error) throw new Error(error.message);
+  revalidatePath("/lista");
+  revalidatePath("/admin/lojas");
+  revalidatePath("/");
+}
+
+export async function updateLoja(formData: FormData) {
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase.from("lojas").update({
+    nome: requiredValue(formData, "nome"),
+    cidade: requiredValue(formData, "cidade"),
+    contato: String(formData.get("contato") ?? "").trim() || null,
+    frete_fixo: optionalMoney(formData, "frete_fixo"),
+    frete_gratis_acima: optionalMoney(formData, "frete_gratis_acima"),
+  }).eq("id", requiredValue(formData, "id"));
+  if (error) throw new Error(error.message);
+  revalidatePath("/lista");
   revalidatePath("/admin/lojas");
   revalidatePath("/");
 }
@@ -138,6 +158,7 @@ export async function deleteLoja(formData: FormData) {
   const { supabase } = await getAuthenticatedClient();
   const { error } = await supabase.from("lojas").delete().eq("id", requiredValue(formData, "id"));
   if (error) throw new Error(error.message);
+  revalidatePath("/lista");
   revalidatePath("/admin/lojas");
   revalidatePath("/admin/precos");
   revalidatePath("/");

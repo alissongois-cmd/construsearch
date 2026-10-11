@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     // Same material-name search as the public price search, including materials without offers.
     const { data, error } = await supabase.from("materiais")
-      .select("id, nome, unidade_medida, precos(valor, data_atualizacao, lojas(id, nome, cidade))")
+      .select("id, nome, unidade_medida, precos(valor, data_atualizacao, lojas(id, nome, cidade, frete_fixo, frete_gratis_acima))")
       .ilike("nome", `%${query}%`).order("nome").limit(50);
     if (error) throw error;
     const materials: Material[] = (data ?? []).map((material) => {
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         const store = Array.isArray(quote.lojas) ? quote.lojas[0] : quote.lojas;
         const price = Number(quote.valor);
         if (!store || !Number.isFinite(price) || price < 0 || offers.has(store.id)) continue;
-        offers.set(store.id, { storeId: store.id, store: store.nome, city: store.cidade, price });
+        offers.set(store.id, { storeId: store.id, store: store.nome, city: store.cidade, price, frete_fixo: store.frete_fixo, frete_gratis_acima: store.frete_gratis_acima });
       }
       return { id: material.id, name: material.nome, unit: material.unidade_medida, offers: [...offers.values()] };
     });

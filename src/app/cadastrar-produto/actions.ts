@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { MAX_FILE_BYTES, parseProductSpreadsheet, type IgnoredRow } from "@/lib/product-spreadsheet";
 
+import { optionalMoney } from "@/lib/shipping";
+
 export type SubmissionState = {
   success: boolean;
   message: string;
@@ -25,6 +27,14 @@ export async function submitProduct(
   if (!nome_loja || !cidade || [nome_loja, cidade, contato].some((value) => value.length > 160)) {
     return failure("Preencha nome da loja e cidade, com até 160 caracteres por campo.");
   }
+  let frete_fixo: number | null;
+  let frete_gratis_acima: number | null;
+  try {
+    frete_fixo = optionalMoney(formData, "frete_fixo");
+    frete_gratis_acima = optionalMoney(formData, "frete_gratis_acima");
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : "Informe valores de frete válidos.");
+  }
   const file = formData.get("arquivo");
   if (!(file instanceof File) || !file.size) return failure("Selecione uma planilha .csv ou .xlsx.");
   if (file.size > MAX_FILE_BYTES) return failure("O arquivo deve ter no máximo 1 MB.");
@@ -40,7 +50,7 @@ export async function submitProduct(
     const supabase = await createClient();
     // One atomic insert; anonymous callers have INSERT only, so do not request returning rows.
     const { error } = await supabase.from("envios_pendentes").insert(products.map((product) => ({
-      ...product, nome_loja, cidade, contato: contato || null,
+      ...product, nome_loja, cidade, contato: contato || null, frete_fixo, frete_gratis_acima,
     })));
     if (error) return failure("Nenhum produto foi recebido. Não foi possível salvar agora; tente novamente em instantes.", ignored);
     return {

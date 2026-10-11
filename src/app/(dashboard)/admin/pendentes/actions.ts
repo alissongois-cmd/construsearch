@@ -22,7 +22,7 @@ async function moderate(formData: FormData, approve: boolean) {
     failed = true;
   }
   if (failed) redirect("/admin/pendentes?resultado=erro");
-  for (const path of ["/admin/pendentes", "/admin/lojas", "/admin/materiais", "/admin/precos", "/"]) revalidatePath(path);
+  for (const path of ["/admin/pendentes", "/admin/lojas", "/admin/materiais", "/admin/precos", "/lista", "/"]) revalidatePath(path);
   redirect("/admin/pendentes?resultado=processado");
 }
 

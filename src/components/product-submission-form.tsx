@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { submitProduct, type SubmissionState } from "@/app/cadastrar-produto/actions";
 
+import { ShippingFields } from "@/components/shipping-fields";
+
 const fields = [
   ["nome_loja", "Nome da loja", "Ex.: Depósito São João"],
   ["cidade", "Cidade", "Ex.: São Paulo"],
@@ -33,6 +35,7 @@ export function ProductSubmissionForm() {
           <input name={name} required={name !== "contato"} maxLength={160} type={name === "contato" ? "tel" : "text"} placeholder={placeholder} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" />
         </label>
       ))}
+      <ShippingFields />
       <div className="rounded-md bg-slate-50 p-4 text-sm text-slate-700">
         <a href="/modelo-produtos.csv" download="modelo-produtos.csv" className="font-semibold text-orange-700 underline">Baixar modelo de planilha (CSV)</a>
         <p className="mt-2">Preencha nome_produto e preco em cada linha. Categoria e unidade_medida são opcionais. Use preços positivos, sem R$, com até duas casas decimais.</p>
