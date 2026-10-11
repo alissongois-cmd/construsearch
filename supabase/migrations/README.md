@@ -52,7 +52,26 @@ Execute `20261010000000_create_envios_pendentes.sql` depois das migrations anter
 Pode ser executada novamente: tabela/índice usam `if not exists`, políticas são
 recriadas e a função de aprovação usa `create or replace`.
 
-`/cadastrar-produto` aceita envios sem login. A tabela `envios_pendentes` permite
+Execute também `20261011000000_optional_submission_product_fields.sql` para permitir
+categoria e unidade opcionais nos produtos da planilha. A migration preserva as
+políticas e a função de aprovação e pode ser executada novamente. Campos opcionais
+vazios são armazenados como strings vazias e continuam compatíveis com a aprovação.
+
+`/cadastrar-produto` aceita planilhas CSV e XLSX sem login (primeira aba), com até
+1 MB e 500 linhas de produtos além do cabeçalho. O modelo está disponível em
+`/modelo-produtos.csv`. Nome e preço positivo são obrigatórios; categoria e unidade
+são opcionais. Preços usam até duas casas decimais e respeitam `numeric(12,2)`.
+Fórmulas, erros de células e textos acima de 160 caracteres são ignorados com o
+número da linha e o motivo. Linhas vazias são desconsideradas; linhas internas
+vazias contam para o limite físico de 500 linhas. Arquivos acima dos limites ou
+com cabeçalho inválido são rejeitados sem inserir produtos.
+
+Cada linha válida recebe os mesmos dados da loja e vira um item pendente individual.
+A inserção em lote é atômica: falha de banco confirma zero produtos recebidos.
+O resumo lista a quantidade recebida e as linhas ignoradas. Para corrigir um envio
+parcial, reenvie somente as linhas ignoradas, evitando duplicar os produtos recebidos.
+
+A tabela `envios_pendentes` permite
 inserção anônima apenas dos campos do formulário, com status inicial `pendente`;
 visitantes não podem consultar os envios, alterar status ou remover registros.
 O honeypot é validado no servidor e envios que o preenchem não são gravados.

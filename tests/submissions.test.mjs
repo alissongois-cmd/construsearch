@@ -4,9 +4,11 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { PGlite } from "@electric-sql/pglite";
 import ts from "typescript";
+import * as XLSX from "xlsx";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261010000000_create_envios_pendentes.sql", import.meta.url), "utf8");
 const baseSchema = readFileSync(new URL("../supabase/migrations/20260919000000_create_comparador_materiais_schema.sql", import.meta.url), "utf8");
+const optionalMigration = readFileSync(new URL("../supabase/migrations/20261011000000_optional_submission_product_fields.sql", import.meta.url), "utf8");
 const userId = "11111111-1111-4111-8111-111111111111";
 
 test("migration is repeatable; anonymous submissions remain private; moderation publishes atomically", async () => {
@@ -25,6 +27,8 @@ test("migration is repeatable; anonymous submissions remain private; moderation 
     await db.exec(baseSchema);
     await db.exec(migration);
     await db.exec(migration);
+    await db.exec(optionalMigration);
+    await db.exec(optionalMigration);
     await db.exec("set role anon");
     const insert = "insert into public.envios_pendentes (nome_loja,cidade,nome_produto,categoria,unidade_medida,preco) values ($1,$2,$3,'cimento','saco', $4)";
     await db.query(insert, ["Depósito", "São Paulo", "Cimento", 35.9]);
@@ -73,59 +77,175 @@ test("migration is repeatable; anonymous submissions remain private; moderation 
     assert.equal((await db.query("select count(*)::int as count from public.materiais where nome='Rollback produto'")).rows[0].count, 0);
     assert.equal((await db.query("select status from public.envios_pendentes where id=$1", [rollback])).rows[0].status, "pendente");
     await db.query("delete from public.envios_pendentes where id=$1", [rollback]);
+    await db.query("insert into public.envios_pendentes (nome_loja,cidade,nome_produto,categoria,unidade_medida,preco) values ('Opcional','Cidade','Sem categoria','','',10)");
+    const optional = (await db.query("select id from public.envios_pendentes where nome_produto='Sem categoria'")).rows[0].id;
+    await db.query("select public.aprovar_envio($1)", [optional]);
+    const material = (await db.query("select categoria,unidade_medida from public.materiais where nome='Sem categoria'")).rows[0];
+    assert.equal(material.categoria, "");
+    assert.equal(material.unidade_medida, "");
     await db.exec(`set "request.jwt.claim.sub" = ''`);
     await assert.rejects(db.query("select public.aprovar_envio($1)", [first.id]));
   } finally { await db.close(); }
 });
 
-const actionSource = ts.transpileModule(readFileSync(new URL("../src/app/cadastrar-produto/actions.ts", import.meta.url), "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS },
+const compile = (path) => ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const parserExports = {};
+runInNewContext(compile("../src/lib/product-spreadsheet.ts"), {
+  exports: parserExports, Buffer, Error,
+  require(name) { assert.equal(name, "xlsx"); return XLSX; },
+});
+const actionSource = compile("../src/app/cadastrar-produto/actions.ts");
 
-function submissionAction(error = null) {
+function submissionAction(error = null, throws = false) {
   const stored = [];
   const exports = {};
   runInNewContext(actionSource, {
-    exports,
+    exports, File, Error,
     require(name) {
+      if (name === "@/lib/product-spreadsheet") return parserExports;
       assert.equal(name, "@/lib/supabase/server");
       return { async createClient() { return { from(table) {
         assert.equal(table, "envios_pendentes");
-        return { async insert(value) { stored.push(value); return { error }; } };
+        return { async insert(value) {
+          if (throws) throw new Error("database unavailable");
+          if (!error) stored.push(...value);
+          return { error };
+        } };
       } }; } };
     },
   });
   return { submit: exports.submitProduct, stored };
 }
-
-function validForm() {
+const header = "nome_produto,categoria,unidade_medida,preco";
+const state = { success: false, message: "", received: 0, ignored: [] };
+function validForm(content = `${header}\nCimento,cimento,saco,35.90\nAreia,,,120`, name = "produtos.csv") {
   const form = new FormData();
-  for (const [key, value] of Object.entries({ nome_loja: " Depósito ", cidade: "Cidade", nome_produto: "Cimento", categoria: "cimento", unidade_medida: "saco", preco: "35,90" })) form.set(key, value);
+  form.set("nome_loja", " Depósito ");
+  form.set("cidade", "Cidade");
+  form.set("arquivo", new File([content], name));
   return form;
 }
+function xlsxFile(rows) {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), "Produtos");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
 
-test("public action validates fields and price, discards honeypot, and confirms only successful inserts", async () => {
+test("CSV batches valid rows with shared shop data and reports physical line numbers", async () => {
   const { submit, stored } = submissionAction();
-  const state = { success: false, message: "" };
-  assert.equal((await submit(state, validForm())).success, true);
+  const csv = `${header}\r\nCimento,cimento,saco,35.90\r\nAreia,,,120\r\n\r\nTijolo,,,0\r\n,,,9\r\nPedra,,,abc\r\nCal,,,\r\n"Produto, especial",,,"1,25"`;
+  const result = await submit(state, validForm(csv));
+  assert.equal(result.success, true);
+  assert.equal(result.received, 3);
+  assert.deepEqual(Array.from(result.ignored, (row) => row.line), [5,6,7,8]);
+  assert.match(result.ignored[0].reason, /preço inválido/);
+  assert.match(result.ignored[1].reason, /nome/);
+  assert.match(result.ignored[3].reason, /obrigatório/);
   assert.equal(stored[0].preco, 35.9);
-  assert.equal(stored[0].nome_loja, "Depósito");
-  assert.equal(stored[0].contato, null);
-  assert.equal(stored[0].status, undefined);
+  assert.equal(stored[1].categoria, "");
+  assert.equal(stored[1].unidade_medida, "");
+  assert.equal(stored[2].nome_produto, "Produto, especial");
+  assert.equal(stored[2].preco, 1.25);
+  for (const row of stored) {
+    assert.equal(row.nome_loja, "Depósito");
+    assert.equal(row.cidade, "Cidade");
+    assert.equal(row.contato, null);
+    assert.equal(row.status, undefined);
+  }
+});
+
+test("XLSX supports numeric prices, optional fields, reordered headers, and ignores formulas", async () => {
+  const data = xlsxFile([
+    ["preco", "nome_produto", "unidade_medida", "categoria"],
+    [35.9, "Cimento", "saco", "cimento"],
+    [20, "Areia"],
+    [{ t: "n", f: "10+10", v: 20 }, "Fórmula"],
+    [-1, "Inválido"],
+  ]);
+  const { submit, stored } = submissionAction();
+  const form = validForm(data, "produtos.XLSX"); form.set("contato", "11999999999");
+  const result = await submit(state, form);
+  assert.equal(result.received, 2);
+  assert.deepEqual(Array.from(result.ignored, (row) => row.line), [4,5]);
+  assert.match(result.ignored[0].reason, /fórmulas/);
+  assert.equal(stored[0].preco, 35.9);
+  assert.equal(stored[1].categoria, "");
+  assert.equal(stored[1].contato, "11999999999");
+});
+
+test("rejects unsupported, empty, malformed and oversized files before inserting", async () => {
+  const { submit, stored } = submissionAction();
+  for (const form of [
+    validForm("", "produtos.csv"),
+    validForm("x".repeat(1024 * 1024 + 1)),
+    validForm(`${header}\nCimento,,,1`, "produtos.txt"),
+    validForm("invalid", "produtos.xlsx"),
+    validForm("x", "produtos.xlsx"),
+    validForm("nome,preco\nCimento,1"),
+    validForm(header),
+    validForm(`${header},extra\nCimento,,,1,x`),
+  ]) {
+    const result = await submit(state, form);
+    assert.equal(result.success, false);
+    assert.equal(result.received, 0);
+  }
+  assert.equal(stored.length, 0);
+});
+
+test("enforces exactly 500 product rows in both formats without partially inserting oversized sheets", async () => {
+  for (const format of ["csv", "xlsx"]) {
+    for (const count of [500, 501]) {
+      const data = format === "csv"
+        ? `${header}\n${Array(count).fill("Cimento,,,35.90").join("\n")}`
+        : xlsxFile([header.split(","), ...Array.from({length: count}, () => ["Cimento", "", "", 35.9])]);
+      const { submit, stored } = submissionAction();
+      const result = await submit(state, validForm(data, `produtos.${format}`));
+      assert.equal(result.success, count === 500);
+      assert.equal(result.received, count === 500 ? 500 : 0);
+      assert.equal(stored.length, count === 500 ? 500 : 0);
+      if (count === 501) assert.match(result.message, /500/);
+    }
+  }
+});
+
+test("invalid prices, oversized text, missing shop data and honeypot never write records", async () => {
+  const { submit, stored } = submissionAction();
+  for (const value of ["", "0", "-1", "1e3", "NaN", "Infinity", "2.345", "10000000000", "1,000.00"]) {
+    const result = await submit(state, validForm(`${header}\nCimento,,,"${value}"`));
+    assert.equal(result.success, false);
+    assert.equal(result.ignored.length, 1);
+  }
+  const long = validForm(`${header}\n${"x".repeat(161)},,,1`);
+  assert.equal((await submit(state, long)).success, false);
+  const missing = validForm(); missing.delete("nome_loja");
+  assert.equal((await submit(state, missing)).success, false);
+  const contact = validForm(); contact.set("contato", "x".repeat(161));
+  assert.equal((await submit(state, contact)).success, false);
+  const file = validForm(); file.delete("arquivo");
+  assert.equal((await submit(state, file)).success, false);
   const bot = validForm(); bot.set("website", "spam.example");
   assert.equal((await submit(state, bot)).success, true);
-  assert.equal(stored.length, 1);
-  for (const value of ["", "-1", "1e3", "NaN", "2.345", "10000000000", "1,000.00"]) {
-    const form = validForm(); form.set("preco", value);
-    assert.equal((await submit(state, form)).success, false);
+  assert.equal(stored.length, 0);
+});
+
+test("database errors and exceptions never confirm products or leak database details", async () => {
+  for (const failing of [submissionAction({ message: "database unavailable" }), submissionAction(null, true)]) {
+    const result = await failing.submit(state, validForm(`${header}\nCimento,,,35.90\nAreia,,,0`));
+    assert.equal(result.success, false);
+    assert.equal(result.received, 0);
+    assert.equal(result.ignored.length, 1);
+    assert.ok(!result.message.includes("database unavailable"));
+    assert.equal(failing.stored.length, 0);
   }
-  const missing = validForm(); missing.delete("nome_produto");
-  assert.equal((await submit(state, missing)).success, false);
-  const long = validForm(); long.set("contato", "x".repeat(161));
-  assert.equal((await submit(state, long)).success, false);
-  assert.equal(stored.length, 1);
-  const failed = submissionAction({ message: "database unavailable" });
-  const result = await failed.submit(state, validForm());
-  assert.equal(result.success, false);
-  assert.ok(!result.message.includes("database unavailable"));
+});
+
+test("downloadable template can be submitted with its three examples", async () => {
+  const template = readFileSync(new URL("../public/modelo-produtos.csv", import.meta.url));
+  const { submit, stored } = submissionAction();
+  const result = await submit(state, validForm(template));
+  assert.equal(result.received, 3);
+  assert.equal(result.ignored.length, 0);
+  assert.equal(stored.length, 3);
 });
