@@ -1,3 +1,7 @@
+import { ImageUploadField } from "@/components/image-upload-field";
+import { MaterialImage } from "@/components/material-image";
+import { categoryImage } from "@/lib/material-images";
+import { getCategoryImages } from "@/lib/category-images";
 import { createMaterial, deleteMaterial } from "../actions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -8,13 +12,15 @@ type Material = {
   unidade_medida: string;
   ean: string | null;
   imagem_url: string | null;
+  imagem_ean_url: string | null;
 };
 
 export default async function MateriaisPage() {
   const supabase = await createClient();
+  const categoryImages = await getCategoryImages();
   const { data } = await supabase
     .from("materiais")
-    .select("id, nome, categoria, unidade_medida, ean, imagem_url")
+    .select("id, nome, categoria, unidade_medida, ean, imagem_url, imagem_ean_url")
     .order("nome");
   const materiais = (data ?? []) as Material[];
 
@@ -69,18 +75,7 @@ export default async function MateriaisPage() {
               Se encontrado na Cosmos, a imagem será preenchida automaticamente.
             </span>
           </label>
-          <label className="block text-sm font-medium">
-            Imagem (opcional)
-            <input
-              name="imagem"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="mt-1 block w-full rounded-md border border-slate-300 text-sm text-slate-600 file:mr-3 file:border-0 file:border-r file:border-slate-300 file:bg-slate-50 file:px-3 file:py-2 file:font-semibold file:text-slate-900"
-            />
-            <span className="mt-1 block text-xs font-normal text-slate-500">
-              Alternativa caso o EAN não tenha imagem: JPG, PNG ou WebP, até 2 MB.
-            </span>
-          </label>
+          <ImageUploadField help="JPG, PNG ou WebP, até 2 MB. O upload tem prioridade sobre a imagem do EAN." />
           <button className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">
             Adicionar material
           </button>
@@ -100,22 +95,7 @@ export default async function MateriaisPage() {
                   className="flex items-center justify-between gap-4 p-4"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    {material.imagem_url ? (
-                      // The image host is the project's configurable Supabase URL.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={material.imagem_url}
-                        alt=""
-                        className="h-12 w-12 shrink-0 rounded-md border border-slate-200 object-cover"
-                      />
-                    ) : (
-                      <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400"
-                        aria-hidden="true"
-                      >
-                        sem foto
-                      </div>
-                    )}
+                    <MaterialImage name={material.nome} upload={material.imagem_url} ean={material.imagem_ean_url} category={categoryImage(material.categoria, categoryImages)} className="w-16" />
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-slate-900">{material.nome}</p>
                       <p className="text-sm text-slate-600">

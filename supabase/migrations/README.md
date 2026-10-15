@@ -128,3 +128,40 @@ mas não autentica quem envia.
 
 Verificações: `node --test tests/store-links.test.mjs`, `npm run test:submissions`,
 `npm run lint`, `npm run typecheck` e `npm run build`.
+
+## Imagens ilustrativas por categoria
+
+Aplique `20261016000000_add_category_images.sql` após as migrations de imagens e EAN.
+A migration repetível adiciona `materiais.imagem_ean_url` e `categorias_imagens`,
+com leitura pública e escrita autenticada, preservando as URLs antigas e as
+políticas do bucket. Não foi aplicada automaticamente ao Supabase.
+
+Novos materiais guardam upload em `imagem_url` e resultado Cosmos em
+`imagem_ean_url`. A consulta EAN mantém as mesmas credenciais, timeout e tratamento
+de erros. Upload agora tem prioridade, conforme a regra aprovada. Registros
+antigos continuam usando `imagem_url` sem tentar adivinhar sua origem.
+
+A ordem de exibição é upload/URL legada, EAN, categoria e placeholder neutro.
+Falhas de carregamento também avançam para a próxima opção. O mesmo componente
+exibe o selo “Imagem ilustrativa” nos resultados, admin e lista de compras.
+Não existe página de detalhe no projeto atual.
+
+As categorias continuam como texto livre, associadas por chave normalizada
+(sem acentos, caixa ou espaços extras). Os SVGs de areia, brita, tijolo, cimento,
+ferragens e tintas ficam em `public/category-images/`. Cada arquivo é compartilhado
+por todos os produtos correspondentes. Categorias desconhecidas usam o placeholder
+neutro até receberem uma imagem em `/admin/categorias`.
+
+Para testar: `npm install`, `npm run dev`, faça login e abra `/admin/categorias`.
+Envie ou troque uma imagem JPG/PNG/WebP de até 2 MB. O arquivo é guardado uma única
+vez na pasta do usuário em `materiais-imagens`. A substituição preserva o arquivo
+anterior para não quebrar referências em cache ou de outro usuário.
+Crie materiais sem EAN/foto em `/admin/materiais`, com categorias areia e uma
+categoria desconhecida; confira os resultados de busca e `/lista`. A primeira
+recebe imagem ilustrativa com selo, a segunda placeholder neutro. Adicione uma
+imagem própria e confira que o selo desaparece; com upload + EAN válido, upload
+vence e a imagem EAN fica disponível como alternativa. Para imagens em itens já
+adicionados à lista, remova e adicione novamente para atualizar os dados da sessão.
+
+Verificações: `node --test tests/material-images.test.mjs`, `npm run test:cosmos`,
+`npm run lint`, `npm run typecheck`, `npm run build`.

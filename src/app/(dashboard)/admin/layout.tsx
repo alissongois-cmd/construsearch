@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const links = [
   ["Materiais", "/admin/materiais"],
+  ["Categorias", "/admin/categorias"],
   ["Lojas", "/admin/lojas"],
   ["Preços", "/admin/precos"],
   ["Pendentes", "/admin/pendentes"],

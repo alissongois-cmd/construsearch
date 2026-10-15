@@ -1,5 +1,6 @@
 "use client";
 
+import { MaterialImage } from "./material-image";
 import { useState } from "react";
 import { SearchForm } from "@/components/search-form";
 import { useShoppingList } from "@/components/shopping-list-provider";
@@ -40,7 +41,7 @@ export function ShoppingList() {
     <section aria-label="Materiais encontrados" className="mt-4">
       {searched && <p className="mb-3 text-sm text-ash">{results.length ? `${results.length} materiais encontrados (até 50). Refine a busca se necessário.` : "Nenhum material encontrado. Tente outro nome."}</p>}
       <ul className="grid gap-3 md:grid-cols-2">{results.map((material) => <li key={material.id} className="border border-mist p-4">
-        <h2 className="font-bold">{material.name}</h2><p className="mt-1 text-sm text-ash">Unidade: {material.unit} · {material.offers.length} lojas com preço</p>
+        <MaterialImage name={material.name} upload={material.imageUrl} ean={material.eanImageUrl} category={material.categoryImageUrl} className="mb-3 w-20" /><h2 className="font-bold">{material.name}</h2><p className="mt-1 text-sm text-ash">Unidade: {material.unit} · {material.offers.length} lojas com preço</p>
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(event) => {
           event.preventDefault();
           const quantity = quantities[material.id] ?? 1;
@@ -59,7 +60,7 @@ export function ShoppingList() {
       <h2 id="list-heading" className="border-b border-carbon pb-3 text-lg font-bold">Sua lista · {items.length} itens</h2>
       {!items.length && <p className="mt-4 text-sm text-ash">Busque materiais e adicione-os para comparar o total por loja.</p>}
       <ul>{items.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-mist py-4">
-        <div><h3 className="font-bold">{item.name}</h3><p className="text-sm text-ash">Unidade: {item.unit}</p></div>
+        <div className="flex items-center gap-3"><MaterialImage name={item.name} upload={item.imageUrl} ean={item.eanImageUrl} category={item.categoryImageUrl} className="w-16" /><div><h3 className="font-bold">{item.name}</h3><p className="text-sm text-ash">Unidade: {item.unit}</p></div></div>
         <div className="flex flex-wrap items-center gap-3"><label className="text-sm">Quantidade de {item.name}<input className={`${inputClass} ml-2`} type="number" min="0.01" step="0.01" value={item.quantity} onChange={(event) => {
           const quantity = Number(event.target.value);
           if (event.target.validity.valid && Number.isFinite(quantity) && quantity > 0) setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, quantity } : entry));
