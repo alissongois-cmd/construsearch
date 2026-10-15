@@ -91,6 +91,7 @@ async function createWithImage(thumbnail, manualImage) {
   runInNewContext(actionsSource, {
     exports, File, crypto,
     require(name) {
+      if (name === "@/lib/shipping") return { optionalMoney() { return null; } };
       if (name === "next/cache") return { revalidatePath() {} };
       if (name === "next/navigation") return { redirect() { assert.fail("unexpected redirect"); } };
       if (name === "@/lib/cosmos") return { async findCosmosThumbnail(ean) { assert.equal(ean, "0012345678901"); return thumbnail; } };
@@ -108,10 +109,14 @@ async function createWithImage(thumbnail, manualImage) {
   return { inserted, uploaded };
 }
 
-test("material registration prefers Cosmos, falls back to upload, or saves without an image", async () => {
+test("material registration preserves EAN lookup and prioritizes uploaded images", async () => {
   const automatic = await createWithImage("https://images.example/cosmos.jpg", true);
-  assert.equal(automatic.inserted[0].imagem_url, "https://images.example/cosmos.jpg");
-  assert.equal(automatic.uploaded.length, 0);
+  assert.equal(automatic.inserted[0].imagem_url, "https://storage.example/manual.jpg");
+  assert.equal(automatic.inserted[0].imagem_ean_url, "https://images.example/cosmos.jpg");
+  assert.equal(automatic.uploaded.length, 1);
+  const eanOnly = await createWithImage("https://images.example/cosmos.jpg", false);
+  assert.equal(eanOnly.inserted[0].imagem_url, null);
+  assert.equal(eanOnly.inserted[0].imagem_ean_url, "https://images.example/cosmos.jpg");
   const manual = await createWithImage(null, true);
   assert.equal(manual.inserted[0].imagem_url, "https://storage.example/manual.jpg");
   assert.equal(manual.uploaded.length, 1);

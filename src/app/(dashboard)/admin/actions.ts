@@ -35,9 +35,10 @@ export async function createMaterial(formData: FormData) {
     .trim()
     .replace(/[\s-]/g, "");
   let imagePath: string | null = null;
-  let imageUrl = await findCosmosThumbnail(ean);
+  const eanImageUrl = await findCosmosThumbnail(ean);
+  let imageUrl: string | null = null;
 
-  if (!imageUrl && image instanceof File && image.size > 0) {
+  if (image instanceof File && image.size > 0) {
     const extension = ALLOWED_IMAGE_TYPES[image.type];
 
     if (!extension) {
@@ -71,6 +72,7 @@ export async function createMaterial(formData: FormData) {
     unidade_medida: requiredValue(formData, "unidade_medida"),
     ean: ean || null,
     imagem_url: imageUrl,
+    imagem_ean_url: eanImageUrl,
   });
 
   if (error) {

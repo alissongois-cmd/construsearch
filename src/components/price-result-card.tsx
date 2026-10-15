@@ -1,3 +1,4 @@
+import { MaterialImage } from "./material-image";
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -40,6 +41,8 @@ function getUpdateLabel(updatedAt: string) {
 type PriceResultCardProps = {
   material: string;
   imageUrl: string | null;
+  eanImageUrl?: string | null;
+  categoryImageUrl?: string | null;
   store: string;
   city: string;
   price: number;
@@ -50,6 +53,8 @@ type PriceResultCardProps = {
 export function PriceResultCard({
   material,
   imageUrl,
+  eanImageUrl,
+  categoryImageUrl,
   store,
   city,
   price,
@@ -65,31 +70,7 @@ export function PriceResultCard({
       }`}
     >
       <div className="flex items-start gap-3 sm:gap-4">
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden border border-mist bg-bone sm:h-24 sm:w-24">
-          {imageUrl ? (
-            // The image host is the project's configurable Supabase URL.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={`Imagem de ${material}`}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <svg
-              viewBox="0 0 24 24"
-              className="h-8 w-8 text-ash"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-label="Imagem não disponível"
-              role="img"
-            >
-              <path d="M4 5.5h16v13H4z" />
-              <circle cx="9" cy="10" r="1.5" />
-              <path d="m5 17 4.5-4 3 2.5 2.5-2 4 3.5" />
-            </svg>
-          )}
-        </div>
+        <MaterialImage name={material} upload={imageUrl} ean={eanImageUrl} category={categoryImageUrl} className="w-20 sm:w-24" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
             <h3 className="text-base font-bold leading-snug text-carbon">
