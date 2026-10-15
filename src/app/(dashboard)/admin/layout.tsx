@@ -6,6 +6,7 @@ const links = [
   ["Lojas", "/admin/lojas"],
   ["Preços", "/admin/precos"],
   ["Pendentes", "/admin/pendentes"],
+  ["Imagens EAN", "/admin/imagens-ean"],
   ["QR codes", "/admin/qrcodes"],
 ] as const;
 

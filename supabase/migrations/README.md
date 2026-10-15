@@ -165,3 +165,100 @@ adicionados à lista, remova e adicione novamente para atualizar os dados da ses
 
 Verificações: `node --test tests/material-images.test.mjs`, `npm run test:cosmos`,
 `npm run lint`, `npm run typecheck`, `npm run build`.
+
+## Importação tolerante e EAN opcional
+
+**Ordem de aplicação:** migrations base de materiais/EAN/envios/frete, depois
+`20261015000000_add_store_slugs.sql`, depois
+`20261016000000_add_category_images.sql` (inclui `imagem_ean_url`), por último
+`20261017000000_tolerant_submission_ean.sql`. A última verifica os pré-requisitos
+antes de alterar o banco. Não foi aplicada automaticamente ao Supabase.
+
+Antes de aplicá-la, execute **separadamente** `supabase/checks/ean_preflight.sql`:
+
+```sql
+select ean, count(*) from public.materiais
+where ean is not null group by ean having count(*) > 1;
+```
+
+Revise qualquer duplicata manualmente. A migration nunca apaga ou mescla produtos
+existentes: se houver duplicatas, não cria o índice único, e a aprovação bloqueia
+EANs ambíguos. Depois de resolver as duplicatas, reaplique a migration. Ao final,
+execute **separadamente** `supabase/checks/ean_postflight.sql` para confirmar o
+índice parcial `materiais_ean_unique`, execução autenticada (não `anon`) e permissão
+de gravar `erro_aprovacao`. A criação do índice é protegida de escritas concorrentes.
+
+O importador continua aceitando o modelo antigo de quatro colunas. Só produto e
+preço são obrigatórios; cabeçalhos aceitam aliases sem distinção de caixa, acentos,
+espaços ou underscores. CSV é UTF-8 com ou sem BOM, separado por vírgula ou ponto e
+vírgula; em XLSX usa-se a primeira aba. Preços aceitam `32,90`, `32.90` e `R$ 32,90`
+(sem separadores de milhar), sempre positivos, até duas casas decimais. Em CSV
+separado por vírgula, coloque preços com vírgula entre aspas. Categorias e unidades
+podem faltar. Colunas desconhecidas, como Loja, geram aviso e são ignoradas; a loja
+vem do formulário/link. Cabeçalhos reconhecidos duplicados são rejeitados para
+não escolher arbitrariamente uma coluna. Limites de 1 MB e 500 linhas permanecem.
+
+EAN pode faltar na planilha ou ficar vazio em uma linha. Quando preenchido, aceita
+espaços/hífens, removidos antes de validar GTIN-8/12/13/14 e o dígito verificador.
+Guarde EAN como **texto** no Excel para preservar zeros à esquerda; se o Excel já
+removeu zeros, eles não são adivinhados. EAN inválido ignora apenas sua linha, com
+coluna e motivo. O modelo CSV público inclui uma coluna EAN opcional vazia.
+
+Aprovação preserva SECURITY INVOKER, search_path vazio, RLS, bloqueio consultivo
+transacional e FOR UPDATE. EAN tem prioridade sobre o nome, mesmo que o nome seja
+diferente. Sem correspondência de EAN, busca nome normalizado (caixa/acentos/espaços).
+EAN existente nunca é apagado por envio vazio. Nome igual com EAN diferente,
+EAN duplicado e nomes ambíguos deixam o envio **pendente**, com erro persistente
+visível em `/admin/pendentes`, onde o EAN também é mostrado. A ação confere o
+status após a RPC; não trata o retorno sem exceção como aprovação automática.
+
+### Cosmos em Netlify/serverless
+
+Não há processo permanente, timer em background ou promessa abandonada. A
+aprovação grava um job na mesma transação e, após o commit, aguarda no máximo uma
+consulta Cosmos (timeout de 5 s). A falha de imagem não desfaz a aprovação. O
+restante da fila é acionado pelo botão **Processar próximo** em
+`/admin/imagens-ean`: uma consulta por chamada. Cada chamada termina normalmente.
+
+A RPC de reserva usa bloqueio consultivo no banco para exclusão mútua global,
+permitindo só um job em `processando` em todas as instâncias. Exige intervalo
+mínimo de 1 s entre tentativas; chamadas antecipadas retornam sem consultar a API.
+Cada reserva tem token e prazo de 3 minutos. A próxima chamada recupera reservas
+vencidas para `pendente`; resultados de workers antigos não podem finalizar uma
+nova reserva. Após recuperar, pode ser necessário aguardar 1 s e clicar novamente.
+Nada roda automaticamente se não houver nova chamada.
+
+A fila registra status, tentativas e erro sanitizado. HTTP 404/retorno sem foto
+vira `sem_imagem`; falta de credenciais, HTTP 429/5xx e falha de rede viram `erro`.
+O admin tem paginação e botão **Tentar novamente**, que recoloca o item na fila.
+O resultado só atualiza `imagem_ean_url` se o EAN do material ainda corresponde;
+`imagem_url` (upload) permanece intacta e tem prioridade sobre EAN/categoria.
+
+Configure `COSMOS_API_TOKEN` e `COSMOS_API_USER_AGENT` **apenas no servidor**, nunca
+com prefixo NEXT_PUBLIC_. Não são enviados ao cliente nem registrados nos erros.
+Uma função agendada pode usar as mesmas reservas no futuro, mas não é necessária
+para esse fluxo e não foi adicionada uma rota pública ou chave administrativa.
+
+### Verificação local e no Supabase real
+
+Execute `npm install`, `npm test`, `npm run lint`, `npm run typecheck` e
+`npm run build`. Testes usam PostgreSQL local embutido (PGlite), sem gravar no
+Supabase real. Os testes de SQL cobrem conflitos persistidos, restrições/permissões,
+EAN prioritário, duplicatas, atomicidade, exclusão mútua da fila, pausa e recuperação
+de reservas com proteção contra resposta atrasada.
+
+No ambiente de homologação, após aplicar a migration e executar o postflight:
+
+1. Entre com um usuário autenticado e crie um material de teste com EAN válido.
+2. Envie uma planilha com o mesmo nome e outro EAN válido, além de uma linha válida
+   sem conflito. Aprove a primeira: deve continuar pendente, com o erro “nome igual
+   a um material existente, mas com EAN diferente”, sem novos materiais/preços.
+3. Aprove a linha válida: deve aparecer na busca. Teste novamente aprovar o mesmo
+   envio e confirme que não publica duas vezes.
+4. Em `/admin/imagens-ean`, confira o resultado; teste credenciais ausentes/falha
+   e nova tentativa. Uma falha de imagem deve preservar a aprovação.
+5. Teste o fluxo acima como `authenticated` real: o teste local não substitui as
+   políticas e grants efetivamente instalados no Supabase.
+6. Faça upload manual de `produtos_leroy_merlin_teste.csv` sem alterar o arquivo,
+   em `/cadastrar-produto`. Esse arquivo não foi disponibilizado no repositório;
+   o teste de aceite com o arquivo original será feito pelo usuário no site.
