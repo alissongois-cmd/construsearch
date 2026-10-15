@@ -7,6 +7,7 @@ import { money, type Shipping } from "@/lib/shipping";
 type Submission = Shipping & {
   id: string; nome_loja: string; cidade: string; contato: string | null;
   nome_produto: string; categoria: string; unidade_medida: string;
+  ean: string | null; erro_aprovacao: string | null;
   preco: number; created_at: string;
 };
 
@@ -17,7 +18,7 @@ export default async function PendingSubmissionsPage({ searchParams }: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?redirectTo=/admin/pendentes");
   const { data, error } = await supabase.from("envios_pendentes")
-    .select("id,nome_loja,cidade,contato,frete_fixo,frete_gratis_acima,nome_produto,categoria,unidade_medida,preco,created_at")
+    .select("id,nome_loja,cidade,contato,frete_fixo,frete_gratis_acima,nome_produto,categoria,unidade_medida,preco,created_at,ean,erro_aprovacao")
     .eq("status", "pendente").order("created_at");
   const { resultado } = await searchParams;
   const submissions = (data ?? []) as Submission[];
@@ -26,12 +27,15 @@ export default async function PendingSubmissionsPage({ searchParams }: {
       <h2 className="text-xl font-bold text-slate-900">Produtos pendentes de aprovação</h2>
       <p className="mt-2 text-sm text-slate-600">Aprovar publica o produto e seu preço. Rejeitar mantém o envio no histórico, sem publicação.</p>
       {resultado === "processado" && <p role="status" className="mt-4 text-emerald-700">Envio processado. A lista foi atualizada.</p>}
+      {resultado === "conflito" && <p role="alert" className="mt-4 text-red-700">Envio mantido pendente. Confira o conflito indicado no material.</p>}
       {(error || resultado === "erro") && <p role="alert" className="mt-4 text-red-700">Não foi possível concluir a operação. Tente novamente.</p>}
       {!error && submissions.length === 0 && <p className="mt-6 rounded-xl border bg-white p-6">Nenhum envio pendente.</p>}
       <ul className="mt-6 space-y-4">
         {submissions.map((item) => (
           <li key={item.id} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="text-lg font-bold">{item.nome_produto}</h3>
+            <p className="mt-2 text-sm font-semibold">EAN: {item.ean || "Não informado"}</p>
+            {item.erro_aprovacao && <p role="alert" className="mt-2 rounded border border-red-300 p-3 text-sm text-red-800">{item.erro_aprovacao}</p>}
             <p>{item.categoria} · {item.unidade_medida}</p>
             <p className="mt-2 font-semibold">{Number(item.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
             <p className="mt-2">{item.nome_loja} · {item.cidade}</p>

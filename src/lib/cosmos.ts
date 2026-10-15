@@ -21,10 +21,14 @@ function safeImageUrl(value: unknown) {
  * Cosmos failures are intentionally non-fatal because manual upload is the fallback.
  */
 export async function findCosmosThumbnail(ean: string) {
+  return (await lookupCosmosImage(ean)).url;
+}
+
+export async function lookupCosmosImage(ean: string): Promise<{ url: string | null; error: string | null }> {
   const token = process.env.COSMOS_API_TOKEN;
   const userAgent = process.env.COSMOS_API_USER_AGENT;
 
-  if (!ean || !token?.trim() || !userAgent?.trim()) return null;
+  if (!ean || !token?.trim() || !userAgent?.trim()) return { url: null, error: "EAN ou credenciais Cosmos não configurados no servidor" };
 
   try {
     const response = await fetch(
@@ -43,14 +47,15 @@ export async function findCosmosThumbnail(ean: string) {
       },
     );
 
-    if (!response.ok) return null;
+    if (response.status === 404) return { url: null, error: null };
+    if (!response.ok) return { url: null, error: `Cosmos indisponível (HTTP ${response.status})` };
 
     const product: unknown = await response.json();
     if (!product || typeof product !== "object" || !("thumbnail" in product)) {
-      return null;
+      return { url: null, error: null };
     }
-    return safeImageUrl(product.thumbnail);
+    return { url: safeImageUrl(product.thumbnail), error: null };
   } catch {
-    return null;
+    return { url: null, error: "Falha ou timeout na consulta Cosmos; tente novamente" };
   }
 }

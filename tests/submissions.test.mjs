@@ -107,10 +107,12 @@ test("migration is repeatable; anonymous submissions remain private; moderation 
 const compile = (path) => ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const eanExports = {};
+runInNewContext(compile("../src/lib/ean.ts"), { exports: eanExports, Error });
 const parserExports = {};
 runInNewContext(compile("../src/lib/product-spreadsheet.ts"), {
-  exports: parserExports, Buffer, Error,
-  require(name) { assert.equal(name, "xlsx"); return XLSX; },
+  exports: parserExports, Buffer, Error, TextDecoder,
+  require(name) { if (name === "./ean") return eanExports; assert.equal(name, "xlsx"); return XLSX; },
 });
 const shippingExports = {};
 runInNewContext(compile("../src/lib/shipping.ts"), { exports: shippingExports, Error });
@@ -161,7 +163,7 @@ test("CSV batches valid rows with shared shop data and reports physical line num
   assert.equal(result.received, 3);
   assert.deepEqual(Array.from(result.ignored, (row) => row.line), [5,6,7,8]);
   assert.match(result.ignored[0].reason, /preço inválido/);
-  assert.match(result.ignored[1].reason, /nome/);
+  assert.match(result.ignored[1].reason, /nome/i);
   assert.match(result.ignored[3].reason, /obrigatório/);
   assert.equal(stored[0].preco, 35.9);
   assert.equal(stored[1].categoria, "");
@@ -203,9 +205,8 @@ test("rejects unsupported, empty, malformed and oversized files before inserting
     validForm(`${header}\nCimento,,,1`, "produtos.txt"),
     validForm("invalid", "produtos.xlsx"),
     validForm("x", "produtos.xlsx"),
-    validForm("nome,preco\nCimento,1"),
+    validForm("categoria,unidade\nCimento,1"),
     validForm(header),
-    validForm(`${header},extra\nCimento,,,1,x`),
   ]) {
     const result = await submit(state, form);
     assert.equal(result.success, false);
@@ -300,4 +301,57 @@ test("bound store submissions override tampered identity and reject missing stor
   const missing = submissionAction();
   assert.equal((await missing.submitForStore("inexistente", state, validForm())).success, false);
   assert.equal(missing.stored.length, 0);
+});
+
+const gtin = (body) => {
+  let sum=0;
+  for(let i=body.length-1,w=3;i>=0;i--,w=w===3?1:3)sum+=Number(body[i])*w;
+  return body + String((10-sum%10)%10);
+};
+test("optional EAN supports every GTIN length and preserves leading zeros", async () => {
+  for (const body of ["0123456","01234567890","789123456789","0123456789012"]) {
+    const ean=gtin(body);
+    const { submit, stored }=submissionAction();
+    const form=validForm(`nome,preco,ean\nProduto,32.90,${ean.slice(0,3)} ${ean.slice(3,6)}-${ean.slice(6)}\nSem código,20,`);
+    assert.equal((await submit(state,form)).received,2);
+    assert.equal(stored[0].ean,ean);
+    assert.equal(stored[1].ean,null);
+  }
+});
+test("semicolon CSV, UTF-8 BOM, header aliases, currency and ignored columns", async () => {
+  const {submit,stored}=submissionAction();
+  const form=validForm(`\uFEFF DESCRIÇÃO ; Preço (R$) ; UN ;Código de barras;Loja\r\nCimento;R$ 32,90;saco;;Nome adulterado\r\nAreia;32.90;m³;;Outra loja`);
+  const result=await submit(state,form);
+  assert.equal(result.received,2);
+  assert.equal(stored[0].preco,32.9);
+  assert.equal(stored[0].nome_loja,"Depósito");
+  assert.equal(stored[0].unidade_medida,"saco");
+  assert.equal(stored[0].categoria,"");
+  assert.equal(result.warnings[0],"Colunas ignoradas: Loja");
+});
+test("invalid EAN is a row error; valid rows still submit", async () => {
+  const good=gtin("789123456789");
+  for(const ean of [good.slice(0,-1)+(Number(good.at(-1))+1)%10,"123","abcdefgh","--","789.1234567895"]) {
+    const {submit,stored}=submissionAction();
+    const result=await submit(state,validForm(`produto,valor,gtin\nInválido,10,${ean}\nVálido,20,${good}`));
+    assert.equal(result.received,1);
+    assert.equal(result.ignored[0].line,2);
+    assert.match(result.ignored[0].reason,/EAN:/);
+    assert.equal(stored[0].ean,good);
+  }
+});
+test("missing and duplicate headers are actionable; invalid UTF-8 is rejected", () => {
+  const parse=(text)=>parserExports.parseProductSpreadsheet(Buffer.from(text),"produtos.csv");
+  assert.throws(()=>parse("categoria,unidade\nCimento,saco"),/Nomes aceitos:.*nome_produto.*preço/);
+  assert.throws(()=>parse("nome,produto,preco\nA,B,10"),/Coluna duplicada/);
+  assert.throws(()=>parserExports.parseProductSpreadsheet(Buffer.from([0xff,0xfe,0x61]),"produtos.csv"),/UTF-8/);
+});
+test("old four-column template stays valid; XLSX EAN stays text", async () => {
+  const old=submissionAction();
+  assert.equal((await old.submit(state,validForm())).received,2);
+  assert.equal(old.stored[0].ean,null);
+  const ean=gtin("0123456789012");
+  const action=submissionAction();
+  const result=await action.submit(state,validForm(xlsxFile([["Nome do produto","Valor","EAN"],["Produto",32.9,ean]]),"produtos.xlsx"));
+  assert.equal(result.received,1);assert.equal(action.stored[0].ean,ean);
 });
