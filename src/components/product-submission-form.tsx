@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { submitProduct, type SubmissionState } from "@/app/cadastrar-produto/actions";
+import { submitProduct, submitProductForStore, type SubmissionState } from "@/app/cadastrar-produto/actions";
 
 import { ShippingFields } from "@/components/shipping-fields";
+
+import type { SubmissionStore } from "@/lib/store-links";
 
 const fields = [
   ["nome_loja", "Nome da loja", "Ex.: Depósito São João"],
@@ -22,17 +24,18 @@ function SubmissionSummary({ state }: { state: SubmissionState }) {
   );
 }
 
-export function ProductSubmissionForm() {
-  const [state, action, pending] = useActionState(submitProduct, initialState);
+export function ProductSubmissionForm({ store }: { store?: SubmissionStore | null }) {
+  const [state, action, pending] = useActionState(store ? submitProductForStore.bind(null, store.slug) : submitProduct, initialState);
   if (state.success) {
     return <div><SubmissionSummary state={state} /><p className="mt-3 text-sm text-slate-600">Para corrigir as linhas ignoradas, envie uma nova planilha apenas com esses produtos.</p><button onClick={() => window.location.reload()} className="mt-4 font-semibold underline">Enviar outra planilha</button></div>;
   }
   return (
     <form action={action} className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      {store && <p className="rounded-md border border-mist bg-bone p-3 font-semibold">Enviando preços para: {store.nome}</p>}
       {fields.map(([name, label, placeholder]) => (
         <label key={name} className="block text-sm font-medium">
           {label}
-          <input name={name} required={name !== "contato"} maxLength={160} type={name === "contato" ? "tel" : "text"} placeholder={placeholder} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" />
+          <input name={name} defaultValue={store ? (name === "nome_loja" ? store.nome : name === "cidade" ? store.cidade : undefined) : undefined} readOnly={Boolean(store && name !== "contato")} required={name !== "contato"} maxLength={160} type={name === "contato" ? "tel" : "text"} placeholder={placeholder} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" />
         </label>
       ))}
       <ShippingFields />

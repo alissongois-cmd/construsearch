@@ -122,6 +122,7 @@ function submissionAction(error = null, throws = false) {
   runInNewContext(actionSource, {
     exports, File, Error,
     require(name) {
+      if (name === "@/lib/submission-stores") return { async findSubmissionStore(slug) { return slug === "deposito-id" ? { nome: "Depósito", cidade: "Cidade" } : null; } };
       if (name === "@/lib/shipping") return shippingExports;
       if (name === "@/lib/product-spreadsheet") return parserExports;
       assert.equal(name, "@/lib/supabase/server");
@@ -135,7 +136,7 @@ function submissionAction(error = null, throws = false) {
       } }; } };
     },
   });
-  return { submit: exports.submitProduct, stored };
+  return { submit: exports.submitProduct, submitForStore: exports.submitProductForStore, stored };
 }
 const header = "nome_produto,categoria,unidade_medida,preco";
 const state = { success: false, message: "", received: 0, ignored: [] };
@@ -286,4 +287,17 @@ test("public submissions share optional shipping values and reject invalid shipp
     assert.equal((await action.submit(state, invalid)).success, false);
     assert.equal(action.stored.length, 0);
   }
+});
+
+
+test("bound store submissions override tampered identity and reject missing stores", async () => {
+  const action = submissionAction();
+  const form = validForm();
+  form.set("nome_loja", "Outra loja"); form.set("cidade", "Outra cidade");
+  assert.equal((await action.submitForStore("deposito-id", state, form)).success, true);
+  assert.equal(action.stored[0].nome_loja, "Depósito");
+  assert.equal(action.stored[0].cidade, "Cidade");
+  const missing = submissionAction();
+  assert.equal((await missing.submitForStore("inexistente", state, validForm())).success, false);
+  assert.equal(missing.stored.length, 0);
 });

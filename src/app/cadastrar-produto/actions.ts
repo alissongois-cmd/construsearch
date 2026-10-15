@@ -5,6 +5,8 @@ import { MAX_FILE_BYTES, parseProductSpreadsheet, type IgnoredRow } from "@/lib/
 
 import { optionalMoney } from "@/lib/shipping";
 
+import { findSubmissionStore } from "@/lib/submission-stores";
+
 export type SubmissionState = {
   success: boolean;
   message: string;
@@ -59,5 +61,18 @@ export async function submitProduct(
     };
   } catch {
     return failure("Nenhum produto foi recebido. Não foi possível salvar agora; tente novamente em instantes.", ignored);
+  }
+}
+
+// Resolve the bound link again: readOnly inputs are not a server-side guarantee.
+export async function submitProductForStore(slug: string, previous: SubmissionState, formData: FormData): Promise<SubmissionState> {
+  try {
+    const store = await findSubmissionStore(slug);
+    if (!store) return { success: false, message: "Esta loja não está mais disponível. Reabra a página para enviar pelo formulário normal.", received: 0, ignored: [] };
+    formData.set("nome_loja", store.nome);
+    formData.set("cidade", store.cidade);
+    return await submitProduct(previous, formData);
+  } catch {
+    return { success: false, message: "Não foi possível confirmar a loja. Tente novamente.", received: 0, ignored: [] };
   }
 }

@@ -1,0 +1,13 @@
+@media print {
+  .card {
+    break-inside: avoid;
+    margin: 0 auto 1cm;
+    max-width: 14cm;
+    border: 0;
+    color: #000;
+    background: #fff;
+  }
+  .excluded {
+    display: none;
+  }
+}

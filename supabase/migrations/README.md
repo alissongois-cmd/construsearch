@@ -99,3 +99,32 @@ já cadastrado. Para remover uma configuração, use a edição em `/admin/lojas
 Em `/lista`, o frete é calculado uma vez por loja sobre o subtotal dos produtos,
 com gratuidade ao atingir o mínimo, e lojas com itens sem preço são sinalizadas
 como incompletas.
+
+## QR codes por loja
+
+Aplique `20261015000000_add_store_slugs.sql` no SQL Editor do Supabase antes de
+usar `/admin/qrcodes`. A migração adiciona `lojas.slug`, preenche lojas existentes
+com nome normalizado + UUID e gera slugs automaticamente para novas lojas,
+inclusive as criadas pela aprovação. Pode ser reaplicada; renomear uma loja não
+altera seu slug, preservando os QR codes impressos. Não altera RLS.
+
+Configure `NEXT_PUBLIC_SITE_URL=https://seu-dominio.com` em `.env.local` e no deploy
+para que os QR codes apontem para o domínio público correto. Sem essa variável,
+é usada a origem do navegador. HTTP é aceito apenas para localhost nos testes.
+Reinicie o servidor após configurar a variável.
+
+Teste local: execute `npm install` e `npm run dev`. Faça login e abra
+`/admin/qrcodes`: baixe um PNG, confira o link e use Imprimir (nome, cidade, QR e
+“Atualize seus preços aqui”, uma loja por impressão). Sem login, a rota redireciona
+para login, seguindo a mesma regra do painel de aprovação (usuário autenticado).
+
+Abra o link de uma loja: nome e cidade estarão preenchidos e travados. Envie o
+modelo CSV e confira os registros em `/admin/pendentes`; a publicação continua
+exigindo aprovação. `?loja=nome-normalizado` também funciona quando há uma única
+loja com esse nome. Nomes ambíguos, parâmetros repetidos e lojas inexistentes
+exibem o formulário normal, sem erro. A ação revalida a loja no servidor e ignora
+nome/cidade adulterados em envios vinculados. O link público identifica a loja,
+mas não autentica quem envia.
+
+Verificações: `node --test tests/store-links.test.mjs`, `npm run test:submissions`,
+`npm run lint`, `npm run typecheck` e `npm run build`.
