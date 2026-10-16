@@ -12,6 +12,15 @@ export async function processOneEANImage() {
   const job = data?.[0];
   if (!job) return false;
   const result = await lookupCosmosImage(job.ean);
+  if (result.rateLimit) {
+    const { error: limitError } = await supabase.rpc("registrar_limite_cosmos", {
+      p_material_id: job.material_id, p_token: job.lease_token,
+      p_bloqueado_ate: result.rateLimit.blockedUntil,
+      p_mensagem: result.rateLimit.message, p_cabecalhos: result.rateLimit.headers,
+    });
+    if (limitError) throw new Error("Não foi possível registrar o bloqueio global do Cosmos");
+    return false;
+  }
   const { data: completed, error: saveError } = await supabase.rpc("concluir_busca_imagem_ean", {
     p_material_id: job.material_id, p_token: job.lease_token,
     p_url: result.url, p_erro: result.error,

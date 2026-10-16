@@ -9,6 +9,9 @@ export default async function EANImagesPage({searchParams}: {searchParams: Promi
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?redirectTo=/admin/imagens-ean");
+  const { data: limit, error: limitError } = await supabase.from("cosmos_limite")
+    .select("estado,atingido_em,bloqueado_ate,mensagem,cabecalhos").eq("id", true).maybeSingle();
+  const blocked = Boolean(limit && Date.parse(limit.bloqueado_ate) > Date.now());
   const { resultado, pagina } = await searchParams;
   const page = /^\d{1,6}$/.test(pagina ?? "") ? Math.max(1, Number(pagina)) : 1;
   const { data, error, count } = await supabase.from("buscas_imagem_ean")
@@ -18,8 +21,18 @@ export default async function EANImagesPage({searchParams}: {searchParams: Promi
   return <section>
     <h2 className="text-xl font-bold">Imagens por EAN</h2>
     <p className="mt-2 text-sm text-ash">Uma consulta por clique, com timeout de 5 segundos. A fila permite uma chamada global por vez e intervalo mínimo de 1 segundo. Reservas interrompidas são recuperadas após 3 minutos ao processar o próximo item.</p>
-    <form action={processNextImage} className="mt-4"><QueueSubmitButton>Processar próximo</QueueSubmitButton></form>
-    {resultado && messages[resultado] && <p role="status" className="mt-4">{messages[resultado]}</p>}
+    <form action={processNextImage} className="mt-4"><QueueSubmitButton disabled={Boolean(limitError)} blockedUntil={limit?.bloqueado_ate}>Processar próximo</QueueSubmitButton></form>
+    {limit && <aside role={blocked ? "alert" : "status"} className="mt-4 rounded border border-mist bg-bone p-4">
+      <p className="font-bold">{blocked ? "Limite diário do Cosmos atingido; tente novamente mais tarde" : "Último limite do Cosmos registrado"}</p>
+      <p className="mt-2 text-sm">Registrado em: {new Date(limit.atingido_em).toLocaleString("pt-BR", {timeZone: "America/Sao_Paulo"})} (Brasília).</p>
+      <p className="text-sm">Bloqueio até: {new Date(limit.bloqueado_ate).toLocaleString("pt-BR", {timeZone: "America/Sao_Paulo"})} (Brasília).</p>
+      <p className="mt-3 text-sm font-bold">Resposta do Cosmos (HTTP 429)</p>
+      <pre className="mt-1 whitespace-pre-wrap break-all text-sm">{limit.mensagem || "Resposta sem corpo"}</pre>
+      <p className="mt-3 text-sm font-bold">Cabeçalhos de limite</p>
+      <pre className="mt-1 whitespace-pre-wrap break-all text-xs">{JSON.stringify(limit.cabecalhos, null, 2)}</pre>
+    </aside>}
+    {limitError && <p role="alert" className="mt-4">Não foi possível verificar o bloqueio Cosmos. Confira a migração antes de processar.</p>}
+    {!blocked && resultado && messages[resultado] && <p role="status" className="mt-4">{messages[resultado]}</p>}
     {error && <p role="alert" className="mt-4">Não foi possível carregar a fila. Confira a migração e tente novamente.</p>}
     {!error && !data?.length && <p className="mt-4">Nenhuma busca registrada.</p>}
     <p className="mt-4 text-xs text-ash">Página {page} · {count ?? 0} registros. Falhas e materiais sem imagem permanecem registrados para nova tentativa.</p>
@@ -28,7 +41,7 @@ export default async function EANImagesPage({searchParams}: {searchParams: Promi
       return <li key={job.material_id} className="rounded border border-mist p-4">
         <h3 className="font-bold">{material?.nome ?? job.material_id}</h3>
         <p className="mt-1 text-sm">EAN: {job.ean} · {labels[job.status]} · Tentativas: {job.tentativas}</p>
-        {job.ultimo_erro && <p className="mt-2 text-sm">{job.ultimo_erro}</p>}
+        {job.ultimo_erro && <p className="mt-2 text-sm">{/HTTP\s*429/i.test(job.ultimo_erro) ? "Limite diário do Cosmos atingido; tente novamente mais tarde" : job.ultimo_erro}</p>}
         {["erro","sem_imagem"].includes(job.status) && <form action={retryImage} className="mt-3"><input name="material_id" type="hidden" value={job.material_id} /><QueueSubmitButton>Tentar novamente</QueueSubmitButton></form>}
       </li>;
     })}</ul>

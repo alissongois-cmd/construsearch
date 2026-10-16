@@ -26,3 +26,12 @@ test("serverless worker is bounded to one claimed job and preserves failure deta
  const saveFailure=worker({job,saveError:{message:"database failure"}});
  await assert.rejects(saveFailure.run(),/reserva expirará/);
 });
+
+test("429 opens the global circuit and does not finish the item as a failure",async()=>{
+ const limit={blockedUntil:"2026-10-17T00:00:00Z",message:"Você excedeu 25 consultas",headers:{"retry-after":"3600"}};
+ const run=worker({job:{material_id:"material",ean:"01234565",lease_token:"token"},lookup:{url:null,error:"Limite diário do Cosmos atingido; tente novamente mais tarde",rateLimit:limit}});
+ assert.equal(await run.run(),false);
+ assert.deepEqual(run.calls.map(([name])=>name),["reservar_busca_imagem_ean","cosmos","registrar_limite_cosmos"]);
+ assert.equal(run.calls[2][1].p_mensagem,limit.message);
+ assert.equal(run.calls[2][1].p_token,"token");
+});

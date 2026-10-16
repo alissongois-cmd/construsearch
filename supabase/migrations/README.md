@@ -229,7 +229,8 @@ nova reserva. Após recuperar, pode ser necessário aguardar 1 s e clicar novame
 Nada roda automaticamente se não houver nova chamada.
 
 A fila registra status, tentativas e erro sanitizado. HTTP 404/retorno sem foto
-vira `sem_imagem`; falta de credenciais, HTTP 429/5xx e falha de rede viram `erro`.
+vira `sem_imagem`; falta de credenciais, HTTP 5xx e falha de rede viram `erro`.
+HTTP 429 usa o bloqueio global descrito abaixo, sem falha do item.
 O admin tem paginação e botão **Tentar novamente**, que recoloca o item na fila.
 O resultado só atualiza `imagem_ean_url` se o EAN do material ainda corresponde;
 `imagem_url` (upload) permanece intacta e tem prioridade sobre EAN/categoria.
@@ -262,3 +263,48 @@ No ambiente de homologação, após aplicar a migration e executar o postflight:
 6. Faça upload manual de `produtos_leroy_merlin_teste.csv` sem alterar o arquivo,
    em `/cadastrar-produto`. Esse arquivo não foi disponibilizado no repositório;
    o teste de aceite com o arquivo original será feito pelo usuário no site.
+
+## Bloqueio global ao atingir o limite Cosmos (HTTP 429)
+
+Aplique `20261018000000_cosmos_rate_limit.sql` **depois** da migration de EAN
+`20261017000000_tolerant_submission_ean.sql` e **antes** de publicar esta versão.
+Não foi aplicada automaticamente. A migration é repetível e adiciona o estado
+compartilhado `cosmos_limite` (RLS: apenas authenticated), substitui a reserva da
+fila para respeitar o bloqueio e adiciona a RPC autenticada de registro do limite.
+Nenhuma tabela ou permissão de produtos é alterada.
+
+Ao receber 429, o worker registra `limite_atingido`, data/hora, fim do bloqueio,
+corpo original da resposta e cabeçalhos de limite permitidos. O item retorna a
+`pendente`, sem erro: a tentativa incrementada na reserva é devolvida atomicamente.
+Callbacks repetidos ou com token antigo não descontam tentativas novamente nem
+alteram uma reserva mais recente. O circuito é global entre instâncias Netlify;
+novos cliques e aprovações automáticas não chamam a API durante o bloqueio. O
+cadastro manual de material também verifica esse estado antes de consultar Cosmos.
+
+Use `COSMOS_RATE_LIMIT_COOLDOWN_SECONDS=3600` no servidor para configurar o período
+padrão (1 hora; valores positivos, máximo 30 dias). Se a resposta trouxer
+`Retry-After` em segundos/data HTTP ou cabeçalhos RateLimit/X-RateLimit de reset
+(segundos relativos, timestamp Unix em segundos/milissegundos ou data), usa-se o
+maior horário futuro informado. Sem horário válido, usa-se o período configurado.
+O token permanece exclusivamente em `COSMOS_API_TOKEN`, sem prefixo NEXT_PUBLIC_.
+
+Em `/admin/imagens-ean`, o aviso é “Limite diário do Cosmos atingido; tente
+novamente mais tarde”. Mostra o início/fim em horário de Brasília e a resposta
+original, inclusive quantidades, além dos cabeçalhos de limite. Apenas o token e
+credenciais são ocultados antes de persistir; cookies e cabeçalhos de autenticação
+não são registrados. O botão Processar próximo fica desativado e a tela atualiza
+quando o período termina. A verificação no banco continua impedindo chamadas
+mesmo se alguém tentar contornar o botão. Se não for possível consultar o estado,
+o botão permanece desativado e o enriquecimento manual não consulta a API.
+
+O bloqueio expira pelo relógio do banco, sem processo permanente. O próximo
+processamento permitido continua a fila normalmente. O último limite fica no
+histórico do painel. Imagens de upload/categoria e aprovações permanecem intactas.
+Erros 429 registrados antes desta versão não têm suas tentativas históricas
+reescritas automaticamente.
+
+Testes: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Incluem
+429 com corpo/quantidade, ocultação do token, Retry-After/data/reset/configuração,
+reservas bloqueadas entre chamadas, devolução de tentativa uma única vez,
+reabertura após expiração, permissões e botão desativado. Os testes não consomem a
+cota Cosmos real nem alteram o Supabase remoto.
