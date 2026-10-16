@@ -13,7 +13,7 @@ function lookup(fetch, env = { COSMOS_API_TOKEN: "test-token", COSMOS_API_USER_A
   const exports = {};
   runInNewContext(source, {
     exports, fetch, process: { env }, URL, AbortSignal,
-    require(name) { assert.equal(name, "server-only"); },
+    require(name) { if(name === "@/lib/cosmos-limits") return {async isCosmosBlocked(){return false;},async recordCosmosRateLimit(){}}; assert.equal(name, "server-only"); },
   });
   return exports.findCosmosThumbnail;
 }
