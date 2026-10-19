@@ -1,7 +1,7 @@
 import { shippingEstimate, type Shipping } from "./shipping";
 
 export type Offer = { storeId: string; store: string; city: string; price: number; frete_fixo?: Shipping["frete_fixo"]; frete_gratis_acima?: Shipping["frete_gratis_acima"] };
-export type Material = { id: string; name: string; unit: string; imageUrl?: string | null; eanImageUrl?: string | null; categoryImageUrl?: string | null; offers: Offer[] };
+export type Material = { id: string; name: string; unit: string; imageUrl?: string | null; eanImageUrl?: string | null; catalogImageUrl?: string | null; categoryImageUrl?: string | null; offers: Offer[] };
 export type ListItem = Material & { quantity: number };
 
 export function rankStores(items: ListItem[]) {

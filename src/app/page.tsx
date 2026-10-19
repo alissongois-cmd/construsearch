@@ -1,3 +1,5 @@
+import { loadImageCatalog } from "@/lib/catalog-server";
+import { matchCatalog } from "@/lib/image-catalog";
 import { categoryImage } from "@/lib/material-images";
 import { getCategoryImages } from "@/lib/category-images";
 import { Header } from "@/components/header";
@@ -13,7 +15,7 @@ type Relation<T> = T | T[] | null;
 type SearchResult = {
   valor: number | string;
   data_atualizacao: string;
-  materiais: Relation<{ nome: string; categoria: string; imagem_url: string | null; imagem_ean_url: string | null }>;
+  materiais: Relation<{ id: string; ean: string | null; catalogo_sku: string | null; nome: string; categoria: string; imagem_url: string | null; imagem_ean_url: string | null }>;
   lojas: Relation<{ nome: string; cidade: string }>;
 };
 
@@ -26,6 +28,7 @@ export default async function Home({
 }: {
   searchParams: Promise<{ query?: string }>;
 }) {
+  const catalog = await loadImageCatalog().catch(() => []);
   const categoryImages = await getCategoryImages();
   const { query = "" } = await searchParams;
   const searchTerm = query.trim();
@@ -36,7 +39,7 @@ export default async function Home({
     const { data } = await supabase
       .from("precos")
       .select(
-        "valor, data_atualizacao, materiais!inner(nome, categoria, imagem_url, imagem_ean_url), lojas!inner(nome, cidade)",
+        "valor, data_atualizacao, materiais!inner(id, ean, catalogo_sku, nome, categoria, imagem_url, imagem_ean_url), lojas!inner(nome, cidade)",
       )
       .ilike("materiais.nome", `%${searchTerm}%`)
       .order("valor", { ascending: true });
@@ -139,6 +142,7 @@ export default async function Home({
                         material={material?.nome ?? "Material não identificado"}
                         imageUrl={material?.imagem_url ?? null}
                         eanImageUrl={material?.imagem_ean_url}
+                        catalogImageUrl={material ? matchCatalog(material,catalog).entry?.imagem_url : null}
                         categoryImageUrl={categoryImage(material?.categoria ?? "", categoryImages)}
                         store={store?.nome ?? "Loja não identificada"}
                         city={store?.cidade ?? "Cidade não identificada"}

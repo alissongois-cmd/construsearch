@@ -42,6 +42,7 @@ type PriceResultCardProps = {
   material: string;
   imageUrl: string | null;
   eanImageUrl?: string | null;
+  catalogImageUrl?: string | null;
   categoryImageUrl?: string | null;
   store: string;
   city: string;
@@ -54,6 +55,7 @@ export function PriceResultCard({
   material,
   imageUrl,
   eanImageUrl,
+  catalogImageUrl,
   categoryImageUrl,
   store,
   city,
@@ -70,7 +72,7 @@ export function PriceResultCard({
       }`}
     >
       <div className="flex items-start gap-3 sm:gap-4">
-        <MaterialImage name={material} upload={imageUrl} ean={eanImageUrl} category={categoryImageUrl} className="w-20 sm:w-24" />
+        <MaterialImage name={material} upload={imageUrl} ean={eanImageUrl} catalog={catalogImageUrl} category={categoryImageUrl} className="w-20 sm:w-24" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
             <h3 className="text-base font-bold leading-snug text-carbon">
