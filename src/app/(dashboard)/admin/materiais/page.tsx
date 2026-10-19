@@ -1,3 +1,5 @@
+import { loadImageCatalog } from "@/lib/catalog-server";
+import { matchCatalog } from "@/lib/image-catalog";
 import { ImageUploadField } from "@/components/image-upload-field";
 import { MaterialImage } from "@/components/material-image";
 import { categoryImage } from "@/lib/material-images";
@@ -11,16 +13,18 @@ type Material = {
   categoria: string;
   unidade_medida: string;
   ean: string | null;
+  catalogo_sku: string | null;
   imagem_url: string | null;
   imagem_ean_url: string | null;
 };
 
 export default async function MateriaisPage() {
+  const catalog = await loadImageCatalog().catch(() => []);
   const supabase = await createClient();
   const categoryImages = await getCategoryImages();
   const { data } = await supabase
     .from("materiais")
-    .select("id, nome, categoria, unidade_medida, ean, imagem_url, imagem_ean_url")
+    .select("id, nome, categoria, unidade_medida, ean, catalogo_sku, imagem_url, imagem_ean_url")
     .order("nome");
   const materiais = (data ?? []) as Material[];
 
@@ -95,7 +99,7 @@ export default async function MateriaisPage() {
                   className="flex items-center justify-between gap-4 p-4"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <MaterialImage name={material.nome} upload={material.imagem_url} ean={material.imagem_ean_url} category={categoryImage(material.categoria, categoryImages)} className="w-16" />
+                    <MaterialImage name={material.nome} upload={material.imagem_url} ean={material.imagem_ean_url} catalog={matchCatalog(material,catalog).entry?.imagem_url} category={categoryImage(material.categoria, categoryImages)} className="w-16" />
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-slate-900">{material.nome}</p>
                       <p className="text-sm text-slate-600">

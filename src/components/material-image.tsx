@@ -1,14 +1,14 @@
 "use client";
 import { useState } from "react";
 
-type Props = { name: string; upload?: string | null; ean?: string | null; category?: string | null; className?: string };
+type Props = { name: string; upload?: string | null; ean?: string | null; catalog?: string | null; category?: string | null; className?: string };
 export function MaterialImage(props: Props) {
-  const key = JSON.stringify([props.upload, props.ean, props.category]);
+  const key = JSON.stringify([props.upload, props.ean, props.catalog, props.category]);
   return <ImageFallback key={key} {...props} />;
 }
-function ImageFallback({ name, upload, ean, category, className = "w-24" }: Props) {
+function ImageFallback({ name, upload, ean, catalog, category, className = "w-24" }: Props) {
   const [failed, setFailed] = useState<string[]>([]);
-  const candidates = [{ url: upload, illustrative: false }, { url: ean, illustrative: false }, { url: category, illustrative: true }];
+  const candidates = [{ url: upload, illustrative: false }, { url: ean, illustrative: false }, { url: catalog, illustrative: false }, { url: category, illustrative: true }];
   const image = candidates.find((item) => item.url && !failed.includes(item.url));
   return <figure className={`shrink-0 ${className}`}>
     <div className="flex aspect-square items-center justify-center overflow-hidden border border-mist bg-bone">

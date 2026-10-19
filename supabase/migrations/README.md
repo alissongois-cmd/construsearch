@@ -308,3 +308,81 @@ Testes: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Inclue
 reservas bloqueadas entre chamadas, devolução de tentativa uma única vez,
 reabertura após expiração, permissões e botão desativado. Os testes não consomem a
 cota Cosmos real nem alteram o Supabase remoto.
+
+## Catálogo mestre de imagens (revisar antes de aplicar)
+
+`20261019000000_master_image_catalog.sql` cria o catálogo com SKU único e campos do
+CSV, EAN opcional, sinônimos normalizados e vínculo manual `materiais.catalogo_sku`.
+**Não foi aplicada ao Supabase.** A aplicação deve aguardar o relatório do CSV real
+fornecido pelo usuário, além dos testes locais. Depende do esquema de materiais e
+das migrations de imagens/EAN; reutiliza o bucket `materiais-imagens` e suas regras.
+
+Hoje as outras tabelas administrativas consideram qualquer authenticated um admin.
+Para **o novo catálogo e a alteração de catalogo_sku**, a migration usa a lista
+protegida `private.catalog_admin_emails`, com os e-mails expressamente aprovados:
+`alisson.gois@unesp.br` e `gois17541@gmail.com`. Nenhum usuário da aplicação pode
+ler ou editar essa lista; a manutenção é pelo SQL Editor. A função
+`is_catalog_admin()` usa o usuário real de `auth.users` e exige e-mail confirmado,
+não user_metadata nem um e-mail enviado pelo navegador. É SECURITY DEFINER com
+search_path vazio e execução apenas authenticated. RLS restringe a escrita do
+catálogo; um trigger protege catalogo_sku inclusive contra INSERT/UPDATE diretos
+pelas políticas amplas já existentes em materiais. As permissões das demais
+colunas/telas não são alteradas por esta migration. A policy ampla da proposta
+anterior, caso exista, é removida.
+
+A normalização SQL e TypeScript é equivalente: minúsculas, decomposição Unicode,
+remoção de acentos, separação entre dígito/letra (`20kg` → `20 kg`), remoção de
+pontuação e colapso de espaços. Aplica-se tanto ao nome do material quanto ao nome
+oficial e sinônimos. SKU é texto e mantém caixa e zeros à esquerda; somente nomes
+de arquivos são comparados sem diferenciar maiúsculas/minúsculas.
+
+`/admin/catalogo-imagens` aceita um CSV UTF-8 separado por `;` e seleção múltipla de
+JPG/PNG/WebP. Até 1 MB e 2000 linhas por importação. As quatro colunas obrigatórias
+são ID SKU, Nome Oficial do Produto, Categoria e Arquivo de Imagem. Demais colunas:
+Marca, Linha, Especificacao Tecnica, Cor, Peso e Sinonimos para Busca (Matching).
+Sinônimos podem ser separados por `|`, vírgula ou ponto e vírgula dentro de célula
+entre aspas. Coluna extra EAN é opcional e valida GTIN/dígito verificador; não se
+adivinha EAN a partir do SKU. A importação usa upsert por SKU, nunca por nome.
+
+**Validar sem importar** mostra linhas inválidas, SKUs duplicados (todas as linhas
+correspondentes são ignoradas), imagens sem linha, linhas sem imagem e nomes de
+imagem ambíguos. A importação grava somente linhas válidas. Sem imagem selecionada,
+uma reimportação preserva a imagem já cadastrada; um SKU novo pode ficar sem foto,
+com a ausência informada no relatório. Falhas de upload não substituem a imagem
+existente e são reportadas; os SKUs associados à imagem falha não são gravados.
+
+Para Netlify, as imagens são primeiro reduzidas no navegador; uma chamada pequena
+por imagem usa Sharp no servidor para validar, corrigir orientação e converter
+para WebP com lado máximo de 800 px, sem ampliar imagens pequenas. Metadados são
+gravados em lotes de 25, cada lote atômico; o relatório mostra quantos SKUs foram
+salvos e lotes com falha. Reimportar permite retomar sem duplicar registros. O
+arquivo fica em `<user-id>/catalogo/<hash-do-webp>.webp`: imagens idênticas são
+reutilizadas, inclusive entre SKUs. Arquivos antigos não são apagados para evitar
+quebrar referências.
+
+Nas fotos públicas, a ordem permanece upload próprio → Cosmos/EAN → catálogo →
+categoria ilustrativa → placeholder. Não se sobrescreve imagem_url nem se fazem
+novas chamadas Cosmos durante a importação. O vínculo exato é resolvido por EAN,
+nome oficial normalizado e sinônimo exato, nessa ordem. Mais de um candidato na
+mesma etapa gera ambiguidade, sem escolha automática. Um EAN conhecido divergente
+não é associado por nome/sinônimo. Sem correspondência exata, o painel apresenta
+sugestões por palavras em comum; só o botão Confirmar vínculo grava catalogo_sku.
+As correspondências exatas são resolvidas na leitura, sem gravar vínculos pelo
+visitante. Sugestões nunca entram na exibição pública sem confirmação.
+
+### Resultado local antes da aplicação
+
+Amostra de teste `tests/fixtures/catalogo-mestre-amostra.csv` (não é o arquivo real):
+6 linhas, 3 válidas, 1 linha sem imagem selecionada, 1 imagem sem linha,
+1 SKU duplicado em 2 linhas, 1 linha com campo obrigatório vazio. `ARGAMASSA.JPG`
+foi associado a `argamassa.jpg`; `20kg` e `20 kg` foram equivalentes e sinônimos
+repetidos foram deduplicados. A conversão testada de 1600×1000 gerou WebP 800×500;
+imagem 100×50 permaneceu 100×50.
+
+Testes SQL locais verificam que usuário autenticado fora da lista não escreve no
+catálogo, não altera catalogo_sku e não pode promover a si próprio. Admin permitido
+pode fazer upsert e confirmar vínculos; visitantes leem somente o catálogo público.
+Executar `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
+
+O CSV real do catálogo ainda será enviado pelo usuário. **Não confundir a amostra
+com esse teste de aceite; nenhuma migration deve ser aplicada antes desse relatório.**
