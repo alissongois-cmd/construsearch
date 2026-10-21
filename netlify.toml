@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Do not let a browser or CDN keep serving the previous home page after a deploy.
+[[headers]]
+  for = "/"
+
+  [headers.values]
+    Cache-Control = "max-age=0, no-cache, no-store, must-revalidate"

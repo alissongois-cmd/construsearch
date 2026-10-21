@@ -1,0 +1,12 @@
+import { createLoja, deleteLoja } from "../actions";
+import { createClient } from "@/lib/supabase/server";
+
+type Loja = { id: string; nome: string; cidade: string; contato: string | null };
+
+export default async function LojasPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("lojas").select("id, nome, cidade, contato").order("nome");
+  const lojas = (data ?? []) as Loja[];
+
+  return <div className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"><section><h2 className="text-xl font-bold text-slate-900">Nova loja</h2><p className="mt-1 text-sm text-slate-600">Adicione as lojas que informam preços.</p><form action={createLoja} className="mt-5 space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><label className="block text-sm font-medium">Nome<input required name="nome" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2" placeholder="Ex.: Loja do Construtor" /></label><label className="block text-sm font-medium">Cidade<input required name="cidade" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2" placeholder="Ex.: São Paulo" /></label><label className="block text-sm font-medium">Contato <span className="font-normal text-slate-500">(opcional)</span><input name="contato" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-blue-500 focus:ring-2" placeholder="Telefone ou link" /></label><button className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">Adicionar loja</button></form></section><section><h2 className="text-xl font-bold text-slate-900">Lojas cadastradas</h2><div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">{lojas.length === 0 ? <p className="p-6 text-sm text-slate-600">Nenhuma loja cadastrada.</p> : <ul className="divide-y divide-slate-200">{lojas.map((loja) => <li key={loja.id} className="flex items-center justify-between gap-4 p-4"><div><p className="font-semibold text-slate-900">{loja.nome}</p><p className="text-sm text-slate-600">{loja.cidade}{loja.contato ? ` · ${loja.contato}` : ""}</p></div><form action={deleteLoja}><input type="hidden" name="id" value={loja.id} /><button className="text-sm font-medium text-red-600 hover:underline">Excluir</button></form></li>)}</ul>}</div></section></div>;
+}
