@@ -2,7 +2,6 @@
 import { convertCatalogImage } from "@/lib/catalog-image";
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { requireCatalogAdmin } from "@/lib/catalog-server";
 import { normalizeCatalog, requiredCatalog, type CatalogRow } from "@/lib/image-catalog";
 import { normalizeEAN } from "@/lib/ean";
@@ -46,12 +45,23 @@ export async function saveCatalogBatch(input:{row:CatalogRow;path?:string}[]):Pr
     return {saved:data?.length||0};
   }catch(error){return {saved:0,error:error instanceof Error?error.message:"Falha na importação"};}
 }
-export async function confirmCatalogMatch(form:FormData) {
-  const {supabase}=await requireCatalogAdmin();
-  const id=String(form.get("material_id")||"");const sku=String(form.get("sku")||"");
-  if(!/^[a-f0-9-]{36}$/i.test(id)||!sku)throw new Error("Vínculo inválido.");
-  const {error}=await supabase.from("materiais").update({catalogo_sku:sku}).eq("id",id);
-  if(error){console.error("[catalogo.vincular]",error);throw new Error("Não foi possível confirmar o vínculo.");}
-  for(const page of ["/admin/catalogo-imagens","/admin/materiais","/lista","/"])revalidatePath(page);
-  redirect("/admin/catalogo-imagens?resultado=vinculado");
+export async function confirmCatalogMatch(_previous:{success:boolean;message:string},form:FormData) {
+  try {
+    const {supabase}=await requireCatalogAdmin();
+    const id=String(form.get("material_id")||"");const sku=String(form.get("sku")||"").trim();
+    if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)||!sku||sku.length>160)
+      return {success:false,message:"Vínculo inválido. Recarregue a página e tente novamente."};
+    const {data,error}=await supabase.from("materiais").update({catalogo_sku:sku}).eq("id",id).select("id,catalogo_sku").maybeSingle();
+    if(error){
+      console.error("[catalogo.vincular]",error);
+      return {success:false,message:"Não foi possível confirmar o vínculo. Verifique suas permissões e se o SKU ainda existe."};
+    }
+    if(!data||data.id!==id||data.catalogo_sku!==sku)
+      return {success:false,message:"Nenhum material foi atualizado. O material pode ter sido removido ou seu acesso foi bloqueado pelas políticas do banco (RLS)."};
+    for(const page of ["/admin/catalogo-imagens","/admin/materiais","/lista","/"])revalidatePath(page);
+    return {success:true,message:"Vínculo confirmado com sucesso."};
+  }catch(error){
+    console.error("[catalogo.vincular]",error);
+    return {success:false,message:"Não foi possível confirmar o vínculo. Verifique sua sessão e o acesso de administrador e tente novamente."};
+  }
 }
