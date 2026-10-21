@@ -1,0 +1,7 @@
+ID SKU;Nome Oficial do Produto;Marca;Linha;Categoria;Especificacao Tecnica;Cor;Peso;Arquivo de Imagem;Sinonimos para Busca (Matching)
+SKU-001;Argamassa AC II 20kg;Marca A;AC II;Argamassa;Uso externo;Cinza;20kg;ARGAMASSA.JPG;"argamassa 20kg|Argamassa 20 KG|Massa AC-II"
+SKU-002;Tinta acrílica 18L;Marca B;Premium;Tintas;Lavável;Branca;18L;tinta.png;"Tinta branca, tinta premium"
+SKU-003;Brita 1;Marca C;Granel;Brita;Pedra 1;Cinza;;brita.jpg;"Pedra britada"
+DUP-1;Cimento 50kg;Marca D;;Cimento;;;50kg;cimento.jpg;Cimento
+DUP-1;Cimento CP II;Marca D;;Cimento;;;50kg;cimento.jpg;Cimento CP2
+SKU-004;;Marca E;;Ferragens;;;1kg;ferro.jpg;Ferro
