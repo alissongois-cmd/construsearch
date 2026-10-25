@@ -32,9 +32,7 @@ function requiredValue(formData: FormData, field: string) {
 export async function createMaterial(formData: FormData) {
   const { supabase, user } = await getAuthenticatedClient();
   const image = formData.get("imagem");
-  const ean = String(formData.get("ean") ?? "")
-    .trim()
-    .replace(/[\s-]/g, "");
+  const ean = normalizeEAN(String(formData.get("ean") ?? ""));
   let imagePath: string | null = null;
   const eanImageUrl = ean ? await findCosmosThumbnail(ean) : null;
   let imageUrl: string | null = null;
