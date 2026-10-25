@@ -82,8 +82,11 @@ export async function lookupCosmosImage(ean: string): Promise<{ url: string | nu
   if (!ean || !token?.trim() || !userAgent?.trim()) return { url: null, error: "EAN ou credenciais Cosmos não configurados no servidor" };
 
   try {
+    // The app stores GTIN-14. Cosmos' GTIN endpoint expects the original
+    // 13-digit EAN form when the GTIN-14 has its single packaging zero.
+    const cosmosEAN = ean.length === 14 && ean.startsWith("0") ? ean.slice(1) : ean;
     const response = await fetch(
-      `${COSMOS_API_URL}/gtins/${encodeURIComponent(ean)}.json`,
+      `${COSMOS_API_URL}/gtins/${encodeURIComponent(cosmosEAN)}.json`,
       {
         method: "GET",
         headers: {

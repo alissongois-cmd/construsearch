@@ -360,7 +360,7 @@ arquivo fica em `<user-id>/catalogo/<hash-do-webp>.webp`: imagens idênticas sã
 reutilizadas, inclusive entre SKUs. Arquivos antigos não são apagados para evitar
 quebrar referências.
 
-Nas fotos públicas, a ordem permanece upload próprio → Cosmos/EAN → catálogo →
+Nas fotos públicas, a ordem permanece upload próprio → catálogo → Cosmos/EAN →
 categoria ilustrativa → placeholder. Não se sobrescreve imagem_url nem se fazem
 novas chamadas Cosmos durante a importação. O vínculo exato é resolvido por EAN,
 nome oficial normalizado e sinônimo exato, nessa ordem. Mais de um candidato na
@@ -386,3 +386,28 @@ Executar `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
 
 O CSV real do catálogo ainda será enviado pelo usuário. **Não confundir a amostra
 com esse teste de aceite; nenhuma migration deve ser aplicada antes desse relatório.**
+
+
+## Vínculo automático de catálogo por EAN/GTIN
+
+Aplique a migration 20261025000000_catalog_eans_auto_link.sql somente depois de 20261019000000_master_image_catalog.sql e das migrations anteriores de materiais, EAN e envios. Esta migration cria catalogo_eans, normaliza GTIN-8, GTIN-12, GTIN-13 e GTIN-14 para GTIN-14 (somente dígitos, zeros à esquerda e dígito verificador), migra o EAN legado de catalogo_imagens e mantém a coluna legada sincronizada por trigger. EAN inválido vira NULL e nunca é usado para associação. Conflitos legados (o mesmo GTIN em SKUs diferentes) são registrados em catalogo_ean_conflitos e aparecem no painel para revisão; esses EANs ficam fora da tabela de vínculos. Novas gravações com EAN já usado por outro SKU são bloqueadas.
+
+A função vincular_materiais_por_ean() exige e-mail presente em private.catalog_admin_emails. Leitura de catalogo_eans é pública; escrita e execução manual da revinculação são restritas a administradores. Triggers executam tentativas internas ao aprovar envios, criar/editar materiais e adicionar/alterar EAN no catálogo. Vínculos manual nunca são sobrescritos. Nome/sinônimo continua sendo sugestão, e confirmar uma sugestão grava vinculo_origem='manual'.
+
+Em /admin/catalogo-imagens, use Revincular por EAN para executar a reconciliação e ver contagens de vinculados, materiais sem correspondência e EANs repetidos em materiais. A seção EANs sem foto no catálogo agrupa materiais sem vínculo por EAN. A ordem de imagem é upload do usuário, imagem do catálogo pelo catalogo_sku, imagem EAN/Cosmos, imagem ilustrativa da categoria e placeholder.
+
+Não executar a migration no Supabase remoto durante o desenvolvimento. Revisar conflitos legados antes de aplicá-la. Ordem de deploy:
+1. Revisar/aplicar as migrations prévias, inclusive catálogo mestre.
+2. Fazer backup e revisar EANs duplicados/legados.
+3. Executar 20261025000000_catalog_eans_auto_link.sql no SQL Editor.
+4. Validar permissões com um administrador e um usuário comum.
+5. Abrir /admin/catalogo-imagens, conferir os conflitos e clicar em Revincular por EAN.
+
+Testes locais: node --test tests/catalog-eans.test.mjs, npm test, npm run lint, npm run typecheck e npm run build. Não usar dados de planilhas reais nem credenciais nos testes.
+
+
+### Revisão de EAN/GTIN (PR #31)
+
+A migration cria backups privados antes de normalizar dados legados: `private.materiais_ean_invalidos_backup` e `private.catalogo_imagens_ean_invalidos_backup`. Os registros originais com EAN inválido são preservados integralmente nesses backups antes de a coluna operacional ser normalizada para NULL. As tabelas não concedem acesso a anon/authenticated.
+
+O trigger `normalizar_ean_catalogo` normaliza `catalogo_imagens.ean` em BEFORE INSERT/UPDATE e rejeita códigos inválidos com mensagem explícita. O trigger de `envios_pendentes` faz o mesmo. A aprovação normaliza e valida novamente antes de localizar/criar o material e agendar a busca de imagem. O app armazena EAN como GTIN-14; `src/lib/cosmos.ts` remove o zero de embalagem inicial para consultar o endpoint Cosmos com o EAN-13. Atualizações administrativas diretas de `catalogo_sku` marcam `vinculo_origem='manual'`; as rotinas automáticas usam uma flag local à transação para preservar `vinculo_origem='ean'`.

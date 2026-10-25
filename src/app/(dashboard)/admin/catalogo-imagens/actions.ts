@@ -51,7 +51,7 @@ export async function confirmCatalogMatch(_previous:{success:boolean;message:str
     const id=String(form.get("material_id")||"");const sku=String(form.get("sku")||"").trim();
     if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)||!sku||sku.length>160)
       return {success:false,message:"Vínculo inválido. Recarregue a página e tente novamente."};
-    const {data,error}=await supabase.from("materiais").update({catalogo_sku:sku}).eq("id",id).select("id,catalogo_sku").maybeSingle();
+    const {data,error}=await supabase.from("materiais").update({catalogo_sku:sku,vinculo_origem:"manual"}).eq("id",id).select("id,catalogo_sku").maybeSingle();
     if(error){
       console.error("[catalogo.vincular]",error);
       return {success:false,message:"Não foi possível confirmar o vínculo. Verifique suas permissões e se o SKU ainda existe."};
@@ -63,5 +63,20 @@ export async function confirmCatalogMatch(_previous:{success:boolean;message:str
   }catch(error){
     console.error("[catalogo.vincular]",error);
     return {success:false,message:"Não foi possível confirmar o vínculo. Verifique sua sessão e o acesso de administrador e tente novamente."};
+  }
+}
+
+
+export async function relinkCatalogByEAN():Promise<{success:boolean;message:string;linked?:number;missing?:number;conflicts?:number}> {
+  try {
+    const {supabase}=await requireCatalogAdmin();
+    const {data,error}=await supabase.rpc("vincular_materiais_por_ean");
+    if(error)throw new Error(error.message);
+    const report=Array.isArray(data)?data[0]:data;
+    if(!report)throw new Error("A função não retornou o relatório.");
+    for(const page of ["/admin/catalogo-imagens","/admin/materiais","/lista","/"])revalidatePath(page);
+    return {success:true,linked:Number(report.vinculados||0),missing:Number(report.sem_correspondencia||0),conflicts:Number(report.conflitos||0),message:"Revinculação concluída."};
+  } catch(error) {
+    return {success:false,message:error instanceof Error?error.message:"Falha ao revincular materiais."};
   }
 }

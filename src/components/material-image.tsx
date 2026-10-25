@@ -8,7 +8,7 @@ export function MaterialImage(props: Props) {
 }
 function ImageFallback({ name, upload, ean, catalog, category, className = "w-24" }: Props) {
   const [failed, setFailed] = useState<string[]>([]);
-  const candidates = [{ url: upload, illustrative: false }, { url: ean, illustrative: false }, { url: catalog, illustrative: false }, { url: category, illustrative: true }];
+  const candidates = [{ url: upload, illustrative: false }, { url: catalog, illustrative: false }, { url: ean, illustrative: false }, { url: category, illustrative: true }];
   const image = candidates.find((item) => item.url && !failed.includes(item.url));
   return <figure className={`shrink-0 ${className}`}>
     <div className="flex aspect-square items-center justify-center overflow-hidden border border-mist bg-bone">
