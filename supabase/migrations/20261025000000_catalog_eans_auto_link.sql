@@ -64,28 +64,58 @@ alter table public.catalogo_imagens drop constraint if exists catalogo_imagens_e
 alter table public.catalogo_imagens add constraint catalogo_imagens_ean_check
   check (ean is null or ean ~ '^[0-9]{14}$');
 
--- Fail safely if legacy catalog data assigns the same normalized GTIN to
--- multiple SKUs. Resolve these rows before retrying this migration.
-do $$
-begin
-  if exists (
-    select public.normalizar_ean_gtin(ean)
-    from public.catalogo_imagens
-    where ean is not null
-    group by public.normalizar_ean_gtin(ean)
-    having count(distinct sku) > 1
-  ) then
-    raise exception 'EAN duplicado em mais de um SKU de catalogo_imagens; revise os conflitos antes de aplicar esta migration.';
-  end if;
-end;
-$$;
+-- Keep legacy conflicts visible for administrator review, without choosing a SKU.
+create table if not exists public.catalogo_ean_conflitos (
+  ean_normalizado text primary key,
+  skus text[] not null,
+  criado_em timestamptz not null default now()
+);
+alter table public.catalogo_ean_conflitos enable row level security;
+grant select on public.catalogo_ean_conflitos to authenticated;
+drop policy if exists "Admins read catalog EAN conflicts" on public.catalogo_ean_conflitos;
+create policy "Admins read catalog EAN conflicts" on public.catalogo_ean_conflitos
+  for select to authenticated using (public.is_catalog_admin());
 
-insert into public.catalogo_eans(ean_normalizado, sku, origem)
-select public.normalizar_ean_gtin(ean), sku, 'catalogo_imagens.ean'
+insert into public.catalogo_ean_conflitos(ean_normalizado,skus)
+select public.normalizar_ean_gtin(ean), pg_catalog.array_agg(sku order by sku)
 from public.catalogo_imagens
 where ean is not null and public.normalizar_ean_gtin(ean) is not null
+group by public.normalizar_ean_gtin(ean)
+having count(distinct sku) > 1
+on conflict (ean_normalizado) do update set skus=excluded.skus;
+
+insert into public.catalogo_eans(ean_normalizado, sku, origem)
+select public.normalizar_ean_gtin(ci.ean), ci.sku, 'catalogo_imagens.ean'
+from public.catalogo_imagens ci
+where ci.ean is not null
+  and public.normalizar_ean_gtin(ci.ean) is not null
+  and not exists (
+    select 1 from public.catalogo_ean_conflitos c
+    where c.ean_normalizado=public.normalizar_ean_gtin(ci.ean)
+  )
 on conflict (ean_normalizado) do update
 set sku = excluded.sku, origem = excluded.origem;
+
+create or replace function public.bloquear_ean_catalogo_duplicado()
+returns trigger language plpgsql set search_path = '' as $$
+declare v_ean text;
+begin
+  v_ean := public.normalizar_ean_gtin(new.ean);
+  if v_ean is not null and exists (
+    select 1 from public.catalogo_imagens ci
+    where ci.sku <> new.sku
+      and public.normalizar_ean_gtin(ci.ean) = v_ean
+  ) then
+    raise exception 'EAN % já está associado a outro SKU do catálogo; revise o conflito antes de salvar', v_ean
+      using errcode = '23505';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists bloquear_ean_catalogo_duplicado on public.catalogo_imagens;
+create trigger bloquear_ean_catalogo_duplicado
+  before insert or update of ean, sku on public.catalogo_imagens
+  for each row execute function public.bloquear_ean_catalogo_duplicado();
 
 create or replace function public.sincronizar_ean_catalogo()
 returns trigger
@@ -237,15 +267,15 @@ begin
     and coalesce(m.vinculo_origem, '') <> 'manual'
     and not exists (select 1 from public.catalogo_eans e where e.ean_normalizado = m.ean);
 
-  -- PK guarantees one catalog SKU per EAN. Count legacy duplicate material
-  -- EANs as conflicts for operator review, without choosing a material.
-  select count(*) into conflitos
-  from (
-    select m.ean from public.materiais m
-    where m.ean is not null and m.catalogo_sku is null
-      and coalesce(m.vinculo_origem, '') <> 'manual'
-    group by m.ean having count(*) > 1
-  ) d;
+  select
+    (select count(*) from public.catalogo_ean_conflitos)
+    + (select count(*) from (
+      select m.ean from public.materiais m
+      where m.ean is not null and m.catalogo_sku is null
+        and coalesce(m.vinculo_origem, '') <> 'manual'
+      group by m.ean having count(*) > 1
+    ) d)
+  into conflitos;
   return next;
 end;
 $$;
