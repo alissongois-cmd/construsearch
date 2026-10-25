@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { findCosmosThumbnail } from "@/lib/cosmos";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeEAN } from "@/lib/ean";
 
 import { optionalMoney } from "@/lib/shipping";
 
@@ -35,7 +36,7 @@ export async function createMaterial(formData: FormData) {
     .trim()
     .replace(/[\s-]/g, "");
   let imagePath: string | null = null;
-  const eanImageUrl = await findCosmosThumbnail(ean);
+  const eanImageUrl = ean ? await findCosmosThumbnail(ean) : null;
   let imageUrl: string | null = null;
 
   if (image instanceof File && image.size > 0) {
@@ -70,7 +71,7 @@ export async function createMaterial(formData: FormData) {
     nome: requiredValue(formData, "nome"),
     categoria: requiredValue(formData, "categoria"),
     unidade_medida: requiredValue(formData, "unidade_medida"),
-    ean: ean || null,
+    ean,
     imagem_url: imageUrl,
     imagem_ean_url: eanImageUrl,
   });
