@@ -42,6 +42,13 @@ test("uses server credentials, GTIN endpoint, no cache and a five-second timeout
   assert.equal(signal.reason.name, "TimeoutError");
 });
 
+test("converts stored GTIN-14 to the 13-digit EAN expected by Cosmos", async () => {
+  let requested;
+  const find = lookup(async (url) => { requested=url; return response({thumbnail:"https://images.example/a.jpg"}); });
+  await find("04006381333931");
+  assert.equal(requested,"https://api.cosmos.bluesoft.com.br/gtins/4006381333931.json");
+});
+
 test("missing EAN, token or User-Agent skips the API", async () => {
   const unexpected = () => assert.fail("API must not be called");
   assert.equal(await lookup(unexpected)(""), null);
@@ -94,7 +101,8 @@ async function createWithImage(thumbnail, manualImage) {
       if (name === "@/lib/shipping") return { optionalMoney() { return null; } };
       if (name === "next/cache") return { revalidatePath() {} };
       if (name === "next/navigation") return { redirect() { assert.fail("unexpected redirect"); } };
-      if (name === "@/lib/cosmos") return { async findCosmosThumbnail(ean) { assert.equal(ean, "0012345678901"); return thumbnail; } };
+      if (name === "@/lib/ean") return { normalizeEAN(value) { const digits=String(value).replace(/\D/g,""); return digits ? digits.padStart(14,"0") : null; } };
+      if (name === "@/lib/cosmos") return { async findCosmosThumbnail(ean) { assert.equal(ean, "000012345678901"); return thumbnail; } };
       if (name === "@/lib/supabase/server") return { async createClient() { return supabase; } };
       assert.fail(`unexpected import: ${name}`);
     },
@@ -120,7 +128,7 @@ test("material registration preserves EAN lookup and prioritizes uploaded images
   const manual = await createWithImage(null, true);
   assert.equal(manual.inserted[0].imagem_url, "https://storage.example/manual.jpg");
   assert.equal(manual.uploaded.length, 1);
-  assert.equal(manual.inserted[0].ean, "0012345678901");
+  assert.equal(manual.inserted[0].ean, "000012345678901");
   const noImage = await createWithImage(null, false);
   assert.equal(noImage.inserted[0].imagem_url, null);
   assert.equal(noImage.uploaded.length, 0);

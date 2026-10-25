@@ -360,7 +360,7 @@ arquivo fica em `<user-id>/catalogo/<hash-do-webp>.webp`: imagens idênticas sã
 reutilizadas, inclusive entre SKUs. Arquivos antigos não são apagados para evitar
 quebrar referências.
 
-Nas fotos públicas, a ordem permanece upload próprio → Cosmos/EAN → catálogo →
+Nas fotos públicas, a ordem permanece upload próprio → catálogo → Cosmos/EAN →
 categoria ilustrativa → placeholder. Não se sobrescreve imagem_url nem se fazem
 novas chamadas Cosmos durante a importação. O vínculo exato é resolvido por EAN,
 nome oficial normalizado e sinônimo exato, nessa ordem. Mais de um candidato na
@@ -404,3 +404,10 @@ Não executar a migration no Supabase remoto durante o desenvolvimento. Revisar 
 5. Abrir /admin/catalogo-imagens, conferir os conflitos e clicar em Revincular por EAN.
 
 Testes locais: node --test tests/catalog-eans.test.mjs, npm test, npm run lint, npm run typecheck e npm run build. Não usar dados de planilhas reais nem credenciais nos testes.
+
+
+### Revisão de EAN/GTIN (PR #31)
+
+A migration cria backups privados antes de normalizar dados legados: `private.materiais_ean_invalidos_backup` e `private.catalogo_imagens_ean_invalidos_backup`. Os registros originais com EAN inválido são preservados integralmente nesses backups antes de a coluna operacional ser normalizada para NULL. As tabelas não concedem acesso a anon/authenticated.
+
+O trigger `normalizar_ean_catalogo` normaliza `catalogo_imagens.ean` em BEFORE INSERT/UPDATE e rejeita códigos inválidos com mensagem explícita. O trigger de `envios_pendentes` faz o mesmo. A aprovação normaliza e valida novamente antes de localizar/criar o material e agendar a busca de imagem. O app armazena EAN como GTIN-14; `src/lib/cosmos.ts` remove o zero de embalagem inicial para consultar o endpoint Cosmos com o EAN-13. Atualizações administrativas diretas de `catalogo_sku` marcam `vinculo_origem='manual'`; as rotinas automáticas usam uma flag local à transação para preservar `vinculo_origem='ean'`.
